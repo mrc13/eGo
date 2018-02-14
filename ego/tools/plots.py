@@ -168,13 +168,12 @@ def igeoplot(network, session, tiles=None, geoloc=None, args=None):
 	for line in network.lines.index:
 		popup = """ <b>Line:</b> {} <br>
 					version: {} <br>
-					v_nom: {} <br>
 					s_nom: {} <br>
 					capital_cost: {} <br>
 					g: {} <br>
 					g_pu: {} <br>
 					terrain_factor: {} <br>
-				""".format(line, version, text.v_nom[line],
+				""".format(line, version, 
 				           text.s_nom[line], text.capital_cost[line],
 						   text.g[line],text.g_pu[line],
 						   text.terrain_factor[line]

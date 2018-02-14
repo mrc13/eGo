@@ -86,14 +86,138 @@ if __name__ == '__main__':
 
     if args['eDisGo']['direct_specs']:
         # ToDo: add this to utilities.py
-        
         logging.info('Retrieving Specs')
-        
-        bus_id = 27574 #23971
-    
         from ego.tools.specs import get_etragospecs_direct, get_mvgrid_from_bus_id
         from egoio.db_tables import model_draft
-        specs = get_etragospecs_direct(session, bus_id, eTraGo, args)        
+        
+#        for index, row in eTraGo.buses.iterrows():
+#            bus_id = index
+#            mv_grid_id = get_mvgrid_from_bus_id(session, bus_id)
+#            if mv_grid_id == None:
+#                continue
+#            print("Bus ID: " + str(bus_id) + ", MV grid ID: " + str(mvgrid_id))
+#            
+#            
+        #bus_id = 25741 ### This seems to be a bus qith decent grid distict
+        bus_id = 27358 ### This MV grid should be very diferent
+        
+        specs = get_etragospecs_direct(session, bus_id, eTraGo, args)  
+                
+        mv_grid_id = get_mvgrid_from_bus_id(session, bus_id)
+        
+        from datetime import datetime
+        from edisgo.grid.network import Network, Scenario, TimeSeries, Results, ETraGoSpecs
+        import networkx as nx
+        import matplotlib.pyplot as plt
+
+
+        file_path = '/home/student/Git/eGo/ego/data/grids/SH_model_draft/ding0_grids__' + str(mv_grid_id) + '.pkl'
+        print(file_path)
+        #mv_grid = open(file_path)
+
+        scn_name = 'Status Quo' # Not whure if SH is possible
+#        scenario = Scenario(etrago_specs=specs,
+#                    power_flow=(),
+#                    mv_grid_id=mv_grid_id,
+#                    scenario_name= scn_name)
+        scenario = Scenario(
+                    power_flow='worst-case',
+                    mv_grid_id=mv_grid_id,
+                    scenario_name= scn_name)
+
+        network = Network.import_from_ding0(file_path,
+                                    id=mv_grid_id,
+                                    scenario=scenario)
+        # check SQ MV grid
+        network.analyze()
+#        network.reinforce()
+
+
+        #    network.results = Results()
+        costs = network.results.grid_expansion_costs
+        print(costs)
+        
+        # Meine Auswertungen:
+        
+        import geopandas as gpd
+        from shapely.geometry import Point
+        # The geometry is apparently not in the pypsa container - thus I add it manually
+        
+        buses = network.mv_grid.graph.nodes()# network.mv_grid.graph represents a networkx container, and nodes are extracted
+        bus = {'name': [], 'geom': []} # Dictionary for latter DF
+        for b in buses:
+            bus_name = repr(b) # Knowlededge comes form pypsa_id form edisgo
+            bus['name'].append(bus_name)
+            bus['geom'].append(b.geom)
+            
+        bus_volt = network.mv_grid.voltage_nom # Alle mv-grids haben das selbe voltage-level!
+        # Was ich mir hier querie ist nur das MV-grid - also alles eine Spanung.
+        # In PyPSA stecken hingegen auch die LV-grids drin - daher passt das nicht alles zusammen.
+        
+        bus_df = pd.DataFrame(bus).set_index('name')
+        
+            ## Plotting:
+        crs = {'init': 'epsg:4326'}
+        bus_gdf = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
+        bus_gdf.plot()
+    
+        pypsa_df = network.pypsa.buses[['v_nom', 'control']] # Hier stecken auch die LV grids drin! Brauche ich erstmal nicht, denn von den MVs ist das voltage level konstant!
+        
+#        bus_df = geoms_df.join(pypsa_df, how='outer')  # There are many geoms missing
+        
+        lines = network.mv_grid.graph.lines()
+        line = {'name': [],
+                'bus0': [],
+                'bus1': [],
+                #'type': [],
+                #'x': [],
+                #'r': [],
+                's_nom': [], # Hier habe ich meine maximale Leistung
+                #'length': []
+                } 
+              
+        for l in lines:
+            line['name'].append(repr(l['line']))
+            line['bus0'].append(l['adj_nodes'][0])
+            line['bus1'].append(l['adj_nodes'][1])
+            line['s_nom'].append(
+                sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
+            
+        lines_df = pd.DataFrame(line).set_index('name') 
+        
+        # Hierüber kann man die buses verbinden. Problem: Spannung der Buses ist nur in Pypsa - dort allerdings die Namen anders!
+        for idx, row in lines_df.iterrows():
+            bus0 = repr(row['bus0'])
+            print(bus_df.loc[bus0])
+        
+        # Query zuende schreiben: Hier bekomme ich meine Ströme und spannungen.
+        # Noch genau verstehen: Spannungsregelung durch Blindleistungsbereitstellung. Kann ich davon ausgehen, dass ich keine Spannungsprobleme habe (2. Verteilnetzstudie lesen)
+        
+        network.results.s_res(components=None)['Line_30360001']
+        network.results.v_res(nodes=None, level=None) #level='mv' ausprobieren!!
+        
+       
+        # Alte Auswertugen:
+
+        network.pypsa.buses    
+        slack_bus = network.pypsa.buses[network.pypsa.buses['control'] == 'Slack']
+        
+        eDisGo_results_buses =  network.pypsa.buses[['v_nom', 'control']]
+        eDisGo_results_buses.loc['Bus_Generator_1512777']
+        
+#        
+#        
+#
+#        print(network.mv_grid)
+#
+#        nx.draw(network.mv_grid.graph)
+#        plt.draw()
+#        plt.show()
+#        
+        
+    
+
+      
         
 
 

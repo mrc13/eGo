@@ -582,14 +582,14 @@ def get_etragospecs_direct(session,
         
     #print(performance)
 
-#    print("\n Conventional Dispatch (Normalized): \n",
-#          conv_dsptch_norm, 
-#          "\n\n Renewable Generators: \n",
-#          aggr_gens,
-#          "\n\n Renewable Dispatch: \n",
-#          dispatch,
-#          "\n\n Renewable Curtailment: \n",
-#          curtailment, "\n\n")
+    print("\n Conventional Dispatch (Normalized): \n",
+          conv_dsptch_norm, 
+          "\n\n Renewable Generators: \n",
+          aggr_gens,
+          "\n\n Renewable Dispatch: \n",
+          dispatch,
+          "\n\n Renewable Curtailment: \n",
+          curtailment, "\n\n")
 #    
 #    for keys,values in performance.items():
 #        print(keys, ": ", values)
