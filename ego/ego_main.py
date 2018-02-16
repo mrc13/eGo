@@ -134,13 +134,14 @@ if __name__ == '__main__':
 
 
         #    network.results = Results()
-        costs = network.results.grid_expansion_costs
-        print(costs)
+        #costs = network.results.grid_expansion_costs
+        #print(costs)
         
         # Meine Auswertungen:
         
         import geopandas as gpd
-        from shapely.geometry import Point
+        from shapely.geometry import Point, LineString
+        import geoalchemy2.shape as shape
         # The geometry is apparently not in the pypsa container - thus I add it manually
         
         buses = network.mv_grid.graph.nodes()# network.mv_grid.graph represents a networkx container, and nodes are extracted
@@ -150,7 +151,7 @@ if __name__ == '__main__':
             bus['name'].append(bus_name)
             bus['geom'].append(b.geom)
             
-        bus_volt = network.mv_grid.voltage_nom # Alle mv-grids haben das selbe voltage-level!
+        grid_volt = network.mv_grid.voltage_nom # Alle mv-grids haben das selbe voltage-level!
         # Was ich mir hier querie ist nur das MV-grid - also alles eine Spanung.
         # In PyPSA stecken hingegen auch die LV-grids drin - daher passt das nicht alles zusammen.
         
@@ -185,11 +186,47 @@ if __name__ == '__main__':
             
         lines_df = pd.DataFrame(line).set_index('name') 
         
+        lines_df['v_nom'] = grid_volt
+        lines_df['mv_grid'] = mv_grid_id
+        lines_df['result_id'] = args['global']['result_id'] # ToDo: Check if this is allways correct form args
+        
+        
         # Hierüber kann man die buses verbinden. Problem: Spannung der Buses ist nur in Pypsa - dort allerdings die Namen anders!
+        line_geom = {'geom': []}
         for idx, row in lines_df.iterrows():
             bus0 = repr(row['bus0'])
-            print(bus_df.loc[bus0])
+            bus1 = repr(row['bus1'])
+            geom0 = bus_df.loc[bus0]['geom']
+            geom1 = bus_df.loc[bus1]['geom']
+            line_geom['geom'].append(LineString([geom0, geom1]))
+        lines_df['geom'] = line_geom['geom'] 
         
+        crs = {'init': 'epsg:4326'}
+        lines_gdf = gpd.GeoDataFrame(lines_df, crs=crs, geometry=lines_df.geom)
+        lines_gdf.plot()
+        
+        # Here comes now the insertion into DB
+            # Here, I need a session now (comes from DB file)
+        
+        for idx, row in lines_df.iterrows():
+            new_mv_lines = mv_lines()
+            new_mv_lines.name = idx
+            new_mv_lines.bus0 = repr(row['bus0'])
+            new_mv_lines.bus1 = repr(row['bus1'])
+            new_mv_lines.s_nom = row['s_nom']
+            new_mv_lines.v_nom = row['v_nom']
+            new_mv_lines.mv_grid = row['mv_grid']
+            new_mv_lines.result_id = row['result_id']
+            
+            new_mv_lines.geom = shape.from_shape(row['geom'], srid=4326)
+            
+            session_local.add(new_mv_lines)
+            session_local.commit()
+            
+            
+
+             
+ 
         # Query zuende schreiben: Hier bekomme ich meine Ströme und spannungen.
         # Noch genau verstehen: Spannungsregelung durch Blindleistungsbereitstellung. Kann ich davon ausgehen, dass ich keine Spannungsprobleme habe (2. Verteilnetzstudie lesen)
         
