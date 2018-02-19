@@ -77,15 +77,9 @@ def get_etragospecs_from_db(session,
             ).scalar(
                     )
 
-    scn_name = session.query(
-            ormclass_result_meta.scn_name
-            ).filter(
-            ormclass_result_meta.result_id == result_id
-            ).scalar(
-                    )
-    if scn_name == 'SH Status Quo':
-        scn_name = 'Status Quo' 
-
+    scn_name = get_scn_name_from_result_id(session, result_id)
+    
+    
     specs_meta_data.update({'scn_name':scn_name})
 
     # Generators
@@ -611,4 +605,16 @@ def get_mvgrid_from_bus_id(session,
     # Anyway, this should be adapted by Dingo
     return subst_id
  
-   
+def get_scn_name_from_result_id (session, result_id):
+     
+    ormclass_result_meta = model_draft.__getattribute__('EgoGridPfHvResultMeta')
+    scn_name = session.query(
+            ormclass_result_meta.scn_name
+            ).filter(
+            ormclass_result_meta.result_id == result_id
+            ).scalar(
+                    )
+    if scn_name == 'SH Status Quo':
+        scn_name = 'Status Quo' 
+    
+    return scn_name  
