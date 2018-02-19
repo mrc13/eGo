@@ -8,8 +8,6 @@ __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "maltesc"
 
 import pandas as pd
-#import os
-
 
 from tools.plots import (make_all_plots,plot_line_loading, plot_stacked_gen,
                                  add_coordinates, curtailment, gen_dist,
@@ -35,12 +33,19 @@ from egoio.tools import db
 from egoio.db_tables import model_draft
 #from etrago.tools.io import results_to_oedb
 from ego.tools.specs import get_etragospecs_from_db, get_mvgrid_from_bus_id, get_scn_name_from_result_id
-import logging
 
 ## Logging
-LOG_FILENAME = '/home/student/Git/eGo/ego/corr_edisgo.log'
-logging.basicConfig(filename=LOG_FILENAME,level=logging.INFO)
-logger = logging.getLogger('corr_edisgo')
+import logging
+logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
+
+logger = logging.getLogger('corr_edisgo_logger')
+
+fh = logging.FileHandler('/home/student/Git/eGo/ego/corr_edisgo.log', mode='w')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+
+logger.addHandler(fh)
 
 ## Connection and implicit mapping
 try:
@@ -59,7 +64,7 @@ except:
 ## Explicit Mapping
 ormclass_result_bus = model_draft.EgoGridPfHvResultBus
 
-result_ids = [360]
+result_ids = [361]
 for result_id in result_ids:
     logger.info('eDisGo with result_id: ' + str(result_id))
         
@@ -99,8 +104,10 @@ for result_id in result_ids:
             continue
             
         if mv_grid_id == None:
+            logger.info('No MV grid at this bus')
             continue
         
+        logger.info('MV grid found!')
         logger.info('MV grid ID: ' + str(mv_grid_id))
         try: 
             specs = get_etragospecs_from_db(session, bus_id, result_id)
@@ -172,7 +179,7 @@ for result_id in result_ids:
                 
                 new_mv_bus.geom = shape.from_shape(row['geom'], srid=4326)
                 session.add(new_mv_bus)
-                logger.info('Inserting bus ' + str(idx) + ' to db')
+                logger.info('Inserting bus ' + str(idx) + ' to ram')
                 
  
     #       pypsa_df = network.pypsa.buses[['v_nom', 'control']] # Hier stecken auch die LV grids drin! Brauche ich erstmal nicht, denn von den MVs ist das voltage level konstant!
@@ -230,8 +237,9 @@ for result_id in result_ids:
                 
                 session.add(new_mv_lines)
                 
-                logger.info('Inserting line ' + str(idx) + ' to db')
+                logger.info('Inserting line ' + str(idx) + ' to ram')
                 
+            logger.info('Commit to DB')    
             session.commit()
             
         except:
