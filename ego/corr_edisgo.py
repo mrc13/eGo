@@ -53,11 +53,46 @@ try:
     Session = sessionmaker(bind=conn)
     session = Session()
     
-    Base = automap_base()        
-    Base.prepare(conn, schema='corr_analysis', reflect=True) 
+    from sqlalchemy import ARRAY, BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, Numeric, SmallInteger, String, Table, Text, UniqueConstraint, text
+    from geoalchemy2.types import Geometry, Raster
+    from sqlalchemy.orm import relationship
+    from sqlalchemy.dialects.postgresql.hstore import HSTORE
+    from sqlalchemy.dialects.postgresql.base import OID
+    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.dialects.postgresql import ARRAY, DOUBLE_PRECISION, INTEGER, NUMERIC, TEXT, BIGINT, TIMESTAMP, VARCHAR
 
-    mv_lines = Base.classes.mv_lines_results
-    mv_buses = Base.classes.mv_bus_results
+    Base = declarative_base()
+    
+    class corr_mv_lines_results(Base):
+        __tablename__ = 'corr_mv_lines_results'
+        __table_args__ = {'schema': 'model_draft'}
+    
+        name = Column(Text, primary_key=True)
+        bus0 = Column(Text)
+        bus1 = Column(Text)
+        s_nom = Column(Float(53))
+        s = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
+        v_nom = Column(Float(53))
+        mv_grid = Column(BigInteger, primary_key=True)
+        result_id = Column(Integer, primary_key=True)
+        geom = Column(Geometry('LINESTRING', 4326))
+    
+    class corr_mv_bus_results(Base):
+        __tablename__ = 'corr_mv_bus_results'
+        __table_args__ = {'schema': 'model_draft'}
+    
+        name = Column(Text, primary_key=True)
+        control = Column(Text)
+        type = Column(Text)
+        v_nom = Column(Float(53))
+        v = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
+        mv_grid = Column(BigInteger, primary_key=True)
+        result_id = Column(Integer, primary_key=True)
+        geom = Column(Geometry('POINT', 4326))       
+          
+ 
+    mv_lines = corr_mv_lines_results
+    mv_buses = corr_mv_bus_results   
 except:
     logger.error('Failed connection to one Database',  exc_info=True)
         
@@ -68,6 +103,18 @@ result_ids = [361]
 for result_id in result_ids:
     logger.info('eDisGo with result_id: ' + str(result_id))
         
+    try:
+        session.execute('''
+        DELETE FROM model_draft.corr_mv_lines_results
+            WHERE result_id = :result_id;
+            
+        DELETE FROM model_draft.corr_mv_bus_results
+            WHERE result_id = :result_id;
+            
+        ''', {'result_id': result_id})
+        session.commit()
+    except:
+        logger.error('Clear old results failed',  exc_info=True)
     try:
         scn_name = get_scn_name_from_result_id(session, result_id) # SH Status Quo becomes Status Quo
     except:
@@ -110,21 +157,22 @@ for result_id in result_ids:
         logger.info('MV grid found!')
         logger.info('MV grid ID: ' + str(mv_grid_id))
         try: 
-            specs = get_etragospecs_from_db(session, bus_id, result_id)
+#            specs = get_etragospecs_from_db(session, bus_id, result_id)
+            print('No Specs')
         except:
             logger.error('Specs could not be retrieved',  exc_info=True)
             continue   
 
         try:
             file_path = '/home/student/Git/eGo/ego/data/grids/SH_model_draft/ding0_grids__' + str(mv_grid_id) + '.pkl'
-            scenario = Scenario(etrago_specs=specs,
-                        power_flow=(),
+#            scenario = Scenario(etrago_specs=specs,
+#                        power_flow=(),
+#                        mv_grid_id=mv_grid_id,
+#                        scenario_name=scn_name)
+            scenario = Scenario(
+                        power_flow='worst-case',
                         mv_grid_id=mv_grid_id,
-                        scenario_name=scn_name)
-    #            scenario = Scenario(
-    #                        power_flow='worst-case',
-    #                        mv_grid_id=mv_grid_id,
-    #                        scenario_name= scn_name)
+                        scenario_name= scn_name)
         
             network = Network.import_from_ding0(file_path,
                                         id=mv_grid_id,

@@ -46,24 +46,25 @@ args = {
   'generator_noise': True,
   'gridversion': None,
   'k_mean_clustering': False,
-  'line_grouping': False,
+  'line_grouping': False, # gibt warnung aus. Soll garnicht so gut sei laut Clara
   'load_shedding': False,
   'lpfile': False,
   'method': 'lopf',
   'minimize_loading': False,
   'network_clustering': False,
-  'parallelisation': False,
-  'pf_post_lopf': False,
-  'reproduce_noise': True,
+  'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
+  'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
+  'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
+  'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
   'results': False,
   'scn_name': 'Status Quo',
-  'skip_snapshots': False,
+  'skip_snapshots': False, 
   'solver': 'gurobi',
   'storage_extendable': False}
 
 args['user_name'] = 'maltesc'
 ## eTraGo iteration parameters
-b_factor = [2.0]
+b_factor = [10.0]
 snapshots = [(1,2)]
 comments = ["2 Std, Status Quo"]
     
@@ -88,10 +89,12 @@ for b, s, c in zip(b_factor, snapshots, comments):
     logger.info('eTraGo args: ' + str(args))
     try:    
     ## eTraGo Calculation
+        logger.info('Start eTraGo calculations')
         eTraGo = etrago(args)
     except:
         logger.error('eTraGo returned Error',  exc_info=True)
     try:
+        logger.info('Results to DB')
         results_to_oedb(session, eTraGo, args) 
         
     except:
