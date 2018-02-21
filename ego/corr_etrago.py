@@ -7,26 +7,21 @@ __copyright__ = "Flensburg University of Applied Sciences, Europa-Universität"\
 __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "maltesc"
 
-import pandas as pd
+from sqlalchemy.orm import sessionmaker
 
 from etrago.appl import etrago
-from tools.plots import (make_all_plots,plot_line_loading, plot_stacked_gen,
-                                 add_coordinates, curtailment, gen_dist,
-                                 storage_distribution, igeoplot)
-# For importing geopandas you need to install spatialindex on your system http://github.com/libspatialindex/libspatialindex/wiki/1.-Getting-Started
-from tools.utilities import get_scenario_setting, get_time_steps
-from tools.io import geolocation_buses, etrago_from_oedb
-from tools.results import total_storage_charges
-from tools.local_db import local_db_access
-from sqlalchemy.orm import sessionmaker
-from egoio.tools import db
 from etrago.tools.io import results_to_oedb
 
+from tools.results import total_storage_charges
+from tools.plots import (plot_line_loading, 
+                         plot_stacked_gen, 
+                         storage_distribution)
 
-from egoio.db_tables import model_draft
+from egoio.tools import db
+
+import logging
 
 ## Logging
-import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger('corr_etrago_logger')
@@ -65,8 +60,8 @@ args = {
 args['user_name'] = 'maltesc'
 ## eTraGo iteration parameters
 b_factor = [10.0]
-snapshots = [(1,2)]
-comments = ["2 Std, Status Quo"]
+snapshots = [(2920, 2944)]
+comments = ["24 Std in May, Status Quo"]
     
 try:
     conn = db.connection(section='oedb')
