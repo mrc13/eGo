@@ -22,8 +22,23 @@ cfg_ding0.load_config('config_calc.cfg')
 cfg_ding0.load_config('config_files.cfg')
 cfg_ding0.load_config('config_misc.cfg')
 
-BASEPATH = os.path.join(os.path.expanduser('~'), 'maltesc/.ding0')
+BASEPATH = os.path.join(os.path.expanduser('~'), '.ding0')
 
+
+import logging
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+logger = logging.getLogger(__name__)
+ding0_log = logging.getLogger('ding0') # Also listen to ding0 logger
+
+log_path = os.getcwd()
+fh = logging.FileHandler(os.getcwd() + '/corr_ding0.log', mode='w')
+fh.setLevel(logging.WARNING)
+fh.setFormatter(formatter)
+
+logger.addHandler(fh)
+ding0_log.addHandler(fh)
 
 def create_results_dirs(base_path):
     """Create base path dir and subdirectories
@@ -87,7 +102,7 @@ def run_multiple_grid_districts(mv_grid_districts, run_id, failsafe=False,
         base_path = BASEPATH
 
    
-    conn = db.connection(section='oedb_malte')
+    conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
         
@@ -192,6 +207,7 @@ if __name__ == '__main__':
     mv_grid_districts = list(hvmv_trans_df['subst_id'])
 
     # run grid districts
+    logger.info('Run_multiple_grid_districts')
     run_multiple_grid_districts(mv_grid_districts,
                                 run_id,
                                 failsafe=True,
