@@ -1,5 +1,5 @@
 """
-This is the main file for Master thesis of maltesc
+This is the eTraGo file for Master thesis of maltesc
 
 """
 __copyright__ = "Flensburg University of Applied Sciences, Europa-Universität"\
@@ -13,9 +13,6 @@ from etrago.appl import etrago
 from etrago.tools.io import results_to_oedb
 
 from tools.results import total_storage_charges
-from tools.plots import (plot_line_loading, 
-                         plot_stacked_gen, 
-                         storage_distribution)
 
 from egoio.tools import db
 
@@ -26,7 +23,7 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger('corr_etrago_logger')
 
-fh = logging.FileHandler('/home/student/Git/eGo/ego/corr_etrago.log', mode='w')
+fh = logging.FileHandler('corr_etrago.log')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -94,18 +91,3 @@ for b, s, c in zip(b_factor, snapshots, comments):
         
     except:
         logger.error('Could not save Results to DB',  exc_info=True)
-    try:    
-        # make a line loading plot
-        plot_line_loading(eTraGo)
-        
-        # plot stacked sum of nominal power for each generator type and timestep
-        plot_stacked_gen(eTraGo, resolution="MW")
-        
-        # plot to show extendable storages
-        storage_distribution(eTraGo)
-        
-        # plot storage total charges and discharge
-        total_storage_charges(eTraGo, plot=True)
-
-    except:
-        logger.error('Plots did not work',  exc_info=True)
