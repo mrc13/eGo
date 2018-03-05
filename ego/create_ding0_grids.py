@@ -5,8 +5,6 @@ Create and Update vis tables in corr_analysis
 
 @author: maltesc
 """
-
-import matplotlib.pyplot as plt
 import time
 import os
 import pandas as pd
@@ -19,13 +17,12 @@ from egoio.db_tables import model_draft
 import json
 from datetime import datetime
 
-plt.close('all')
 cfg_ding0.load_config('config_db_tables.cfg')
 cfg_ding0.load_config('config_calc.cfg')
 cfg_ding0.load_config('config_files.cfg')
 cfg_ding0.load_config('config_misc.cfg')
 
-BASEPATH = os.path.join(os.path.expanduser('~'), '.ding0')
+BASEPATH = os.path.join(os.path.expanduser('~'), 'maltesc/.ding0')
 
 
 def create_results_dirs(base_path):
@@ -90,7 +87,7 @@ def run_multiple_grid_districts(mv_grid_districts, run_id, failsafe=False,
         base_path = BASEPATH
 
    
-    conn = db.connection(section='oedb')
+    conn = db.connection(section='oedb_malte')
     Session = sessionmaker(bind=conn)
     session = Session()
         
