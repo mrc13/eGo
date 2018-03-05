@@ -87,7 +87,7 @@ def run_multiple_grid_districts(mv_grid_districts, run_id, failsafe=False,
         base_path = BASEPATH
 
    
-    conn = db.connection(section='oedb_malte')
+    conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
         
