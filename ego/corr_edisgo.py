@@ -33,7 +33,7 @@ from egoio.tools import db
 from egoio.db_tables import model_draft
 #from etrago.tools.io import results_to_oedb
 from ego.tools.specs import get_etragospecs_from_db, get_mvgrid_from_bus_id, get_scn_name_from_result_id
-
+from ego.tools import corr_io
 ## Logging
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
@@ -61,38 +61,8 @@ try:
     from sqlalchemy.ext.declarative import declarative_base
     from sqlalchemy.dialects.postgresql import ARRAY, DOUBLE_PRECISION, INTEGER, NUMERIC, TEXT, BIGINT, TIMESTAMP, VARCHAR
 
-    Base = declarative_base()
-    
-    class corr_mv_lines_results(Base):
-        __tablename__ = 'corr_mv_lines_results'
-        __table_args__ = {'schema': 'model_draft'}
-    
-        name = Column(Text, primary_key=True)
-        bus0 = Column(Text)
-        bus1 = Column(Text)
-        s_nom = Column(Float(53))
-        s = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
-        v_nom = Column(Float(53))
-        mv_grid = Column(BigInteger, primary_key=True)
-        result_id = Column(Integer, primary_key=True)
-        geom = Column(Geometry('LINESTRING', 4326))
-    
-    class corr_mv_bus_results(Base):
-        __tablename__ = 'corr_mv_bus_results'
-        __table_args__ = {'schema': 'model_draft'}
-    
-        name = Column(Text, primary_key=True)
-        control = Column(Text)
-        type = Column(Text)
-        v_nom = Column(Float(53))
-        v = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
-        mv_grid = Column(BigInteger, primary_key=True)
-        result_id = Column(Integer, primary_key=True)
-        geom = Column(Geometry('POINT', 4326))       
-          
- 
-    mv_lines = corr_mv_lines_results
-    mv_buses = corr_mv_bus_results   
+    mv_lines = corr_io.corr_mv_lines_results
+    mv_buses = corr_io.corr_mv_bus_results   
 except:
     logger.error('Failed connection to one Database',  exc_info=True)
         
@@ -192,7 +162,7 @@ for result_id in result_ids:
 #        print(costs)
         try: 
             buses = network.mv_grid.graph.nodes()# network.mv_grid.graph represents a networkx container, and nodes are extracted
-            bus = {'name': [], 'geom': []} # Dictionary for latter DF
+            bus = {'name': [], 'geom': []} # Dictionary of lists
             for b in buses:
                 bus_name = repr(b) # Knowlededge comes form pypsa_id form edisgo
                 bus['name'].append(bus_name)
@@ -214,14 +184,20 @@ for result_id in result_ids:
             for idx, row in bus_df.iterrows():
                 new_mv_bus = mv_buses()
                 new_mv_bus.name = idx
-                
+                pypsa_name = "Bus_" + new_mv_bus.name
                 new_mv_bus.control = row['control']
                 new_mv_bus.type = row['type']
                 new_mv_bus.v_nom = grid_volt
                 try:
                     new_mv_bus.v = network.results.v_res(nodes=None, level='mv')[idx]
                 except:
+                    logger.warning("No voltage series for bus " + str(idx))
                     new_mv_bus.v = None
+                try:
+                    new_mv_bus.v_ang = network.pypsa.buses_t.v_ang[pypsa_name]
+                except:
+                    new_mv_bus.v_ang = None
+                    logger.warning("No voltage angle for bus " + str(idx))
                 new_mv_bus.mv_grid = mv_grid_id
                 new_mv_bus.result_id = result_id
                 

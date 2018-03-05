@@ -24,7 +24,6 @@ cfg_ding0.load_config('config_misc.cfg')
 
 BASEPATH = os.path.join(os.path.expanduser('~'), '.ding0')
 
-
 import logging
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
