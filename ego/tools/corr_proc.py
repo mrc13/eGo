@@ -186,6 +186,7 @@ mv_levels = pd.unique(mv_line_gdf['v_nom']).tolist()
 
 all_levels = mv_levels + hv_levels
 
+
 ## Buses
 query = session.query(
         ormclass_result_bus.bus_id,
@@ -252,6 +253,28 @@ trafo_gdf['v_nom0'] = trafo_gdf.apply(
         lambda x: bus_gdf.loc[x['bus0']]['v_nom'], axis=1)
 trafo_gdf['v_nom1'] = trafo_gdf.apply(
         lambda x: bus_gdf.loc[x['bus1']]['v_nom'], axis=1)
+
+## MV Transformers
+query = session.query(
+        ormclass_hvmv_subst.point,
+        ormclass_hvmv_subst.subst_id,
+        ormclass_hvmv_subst.otg_id)
+mv_trafo_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+
+mv_trafo_df['point'] = mv_trafo_df.apply(
+        lambda x: to_shape(x['point']), axis=1)
+
+crs = {'init': 'epsg:4326'}
+mv_trafo_gdf = gpd.GeoDataFrame(mv_trafo_df, crs=crs, geometry='point')
+
+mv_trafo_gdf['bus0'] = mv_trafo_df.apply(
+        lambda x: 'MVStation_' + str(x['subst_id']), axis=1)
+mv_trafo_gdf['bus1'] = mv_trafo_df.apply(
+        lambda x: x['otg_id'], axis=1)
+
 
 
 
@@ -525,9 +548,15 @@ plot_df.plot(
         color='grey',
         linewidth=0.4,
         ax = ax1)
+
 plot_df = trafo_gdf
 plot_df.plot(
         color='red',
+        markersize=200,
+        ax=ax1)
+plot_df = mv_trafo_gdf
+plot_df.plot(
+        color='violet',
         markersize=200,
         ax=ax1)
 
