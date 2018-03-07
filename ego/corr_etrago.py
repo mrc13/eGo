@@ -49,8 +49,8 @@ args = {
   'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
-  'results': False, #'~/maltesc/Git/eGo/ego/results'
-  'scn_name': 'SH Status Quo',
+  'results': '~/maltesc/Git/eGo/ego/results',
+  'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
@@ -58,8 +58,8 @@ args = {
 args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
 b_factor = [10.0]
-snapshots = [(1, 2)]
-comments = ["2 Std SH Status Quo Sever Test"]
+snapshots = [(1, 24)]
+comments = ["24 Std NEP 2035 Sever Test"]
 
 try:
     conn = db.connection(section='oedb')
