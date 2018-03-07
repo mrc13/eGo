@@ -20,14 +20,14 @@ from edisgo.grid.network import Network, Scenario, TimeSeries, Results, ETraGoSp
 
 import networkx as nx
 import matplotlib.pyplot as plt
-        
+
 import geopandas as gpd
 from shapely.geometry import Point, LineString
 from math import sqrt
 import geoalchemy2.shape as shape
 
 from sqlalchemy.ext.automap import automap_base
-        
+
 from sqlalchemy.orm import sessionmaker
 from egoio.tools import db
 from egoio.db_tables import model_draft
@@ -40,7 +40,7 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger('corr_edisgo_logger')
 
-fh = logging.FileHandler('/home/student/Git/eGo/ego/corr_edisgo.log', mode='w')
+fh = logging.FileHandler('corr_edisgo.log', mode='w')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -52,7 +52,7 @@ try:
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
-    
+
     from sqlalchemy import ARRAY, BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, Numeric, SmallInteger, String, Table, Text, UniqueConstraint, text
     from geoalchemy2.types import Geometry, Raster
     from sqlalchemy.orm import relationship
@@ -62,25 +62,25 @@ try:
     from sqlalchemy.dialects.postgresql import ARRAY, DOUBLE_PRECISION, INTEGER, NUMERIC, TEXT, BIGINT, TIMESTAMP, VARCHAR
 
     mv_lines = corr_io.corr_mv_lines_results
-    mv_buses = corr_io.corr_mv_bus_results   
+    mv_buses = corr_io.corr_mv_bus_results
 except:
     logger.error('Failed connection to one Database',  exc_info=True)
-        
+
 ## Explicit Mapping
 ormclass_result_bus = model_draft.EgoGridPfHvResultBus
 
 result_ids = [361]
 for result_id in result_ids:
     logger.info('eDisGo with result_id: ' + str(result_id))
-        
+
     try:
         session.execute('''
         DELETE FROM model_draft.corr_mv_lines_results
             WHERE result_id = :result_id;
-            
+
         DELETE FROM model_draft.corr_mv_bus_results
             WHERE result_id = :result_id;
-            
+
         ''', {'result_id': result_id})
         session.commit()
     except:
@@ -90,7 +90,7 @@ for result_id in result_ids:
     except:
         logger.error('Failed to get scn_name',  exc_info=True)
         continue
-    
+
     try:
         query = session.query(
                 ormclass_result_bus.bus_id
@@ -106,32 +106,32 @@ for result_id in result_ids:
     except:
         logger.error('Failed retrieve etrago buses',  exc_info=True)
         continue
-     
+
     for idx, row in etrago_bus_df.iterrows(): # 27358 and 25741 are two buses with very different MV grids
         print(str(cnt) + '/' + str(n_buses))
         cnt = cnt + 1
-        
-        bus_id = row['bus_id'] 
+
+        bus_id = row['bus_id']
         logger.info('Bus ID: ' + str(bus_id))
-        
+
         try:
             mv_grid_id = get_mvgrid_from_bus_id(session, bus_id)
         except:
             logger.error('mv_grid query failed',  exc_info=True)
             continue
-            
+
         if mv_grid_id == None:
             logger.info('No MV grid at this bus')
             continue
-        
+
         logger.info('MV grid found!')
         logger.info('MV grid ID: ' + str(mv_grid_id))
-        try: 
+        try:
 #            specs = get_etragospecs_from_db(session, bus_id, result_id)
             print('No Specs')
         except:
             logger.error('Specs could not be retrieved',  exc_info=True)
-            continue   
+            continue
 
         try:
             file_path = '/home/student/Git/eGo/ego/data/grids/SH_model_draft/ding0_grids__' + str(mv_grid_id) + '.pkl'
@@ -143,44 +143,44 @@ for result_id in result_ids:
                         power_flow='worst-case',
                         mv_grid_id=mv_grid_id,
                         scenario_name= scn_name)
-        
+
             network = Network.import_from_ding0(file_path,
                                         id=mv_grid_id,
                                         scenario=scenario)
         except:
             logger.error('Scenario or Network could not be initiated',  exc_info=True)
-            continue    
-        
+            continue
+
         try:
             network.analyze()
 #           network.reinforce()
         except:
             logger.error('Network could not be analyzed',  exc_info=True)
-            continue 
-        
+            continue
+
 #        costs = network.results.grid_expansion_costs
 #        print(costs)
-        try: 
+        try:
             buses = network.mv_grid.graph.nodes()# network.mv_grid.graph represents a networkx container, and nodes are extracted
             bus = {'name': [], 'geom': []} # Dictionary of lists
             for b in buses:
                 bus_name = repr(b) # Knowlededge comes form pypsa_id form edisgo
                 bus['name'].append(bus_name)
                 bus['geom'].append(b.geom)
-                
+
             grid_volt = network.mv_grid.voltage_nom # Alle mv-grids haben das selbe voltage-level!
             # Was ich mir hier querie ist nur das MV-grid - also alles eine Spanung.
             # In PyPSA stecken hingegen auch die LV-grids drin - daher passt das nicht alles zusammen.
-            
+
             bus_df = pd.DataFrame(bus).set_index('name')
             bus_df = bus_df.join(network.pypsa.generators[['type', 'control']]) # Like this (right) join, only mv generators are included
-             
+
                 ## Plotting:
 #            crs = {'init': 'epsg:4326'}
 #            bus_gdf = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
 #            bus_gdf.plot()
-            
-        
+
+
             for idx, row in bus_df.iterrows():
                 new_mv_bus = mv_buses()
                 new_mv_bus.name = idx
@@ -200,14 +200,14 @@ for result_id in result_ids:
                     logger.warning("No voltage angle for bus " + str(idx))
                 new_mv_bus.mv_grid = mv_grid_id
                 new_mv_bus.result_id = result_id
-                
+
                 new_mv_bus.geom = shape.from_shape(row['geom'], srid=4326)
                 session.add(new_mv_bus)
                 logger.info('Inserting bus ' + str(idx) + ' to ram')
-                
- 
+
+
     #       pypsa_df = network.pypsa.buses[['v_nom', 'control']] # Hier stecken auch die LV grids drin! Brauche ich erstmal nicht, denn von den MVs ist das voltage level konstant!
-    
+
             lines = network.mv_grid.graph.lines()
             line = {'name': [],
                     'bus0': [],
@@ -217,21 +217,21 @@ for result_id in result_ids:
                     #'r': [],
                     's_nom': [], # Hier habe ich meine maximale Leistung
                     #'length': []
-                    } 
-                  
+                    }
+
             for l in lines:
                 line['name'].append(repr(l['line']))
                 line['bus0'].append(l['adj_nodes'][0])
                 line['bus1'].append(l['adj_nodes'][1])
                 line['s_nom'].append(
                     sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
-                
-            lines_df = pd.DataFrame(line).set_index('name') 
-            
+
+            lines_df = pd.DataFrame(line).set_index('name')
+
             lines_df['v_nom'] = grid_volt
             lines_df['mv_grid'] = mv_grid_id
             lines_df['result_id'] = result_id
-            
+
             # Hierüber kann man die buses verbinden. Problem: Spannung der Buses ist nur in Pypsa - dort allerdings die Namen anders!
             line_geom = {'geom': []}
             for idx, row in lines_df.iterrows():
@@ -240,12 +240,12 @@ for result_id in result_ids:
                 geom0 = bus_df.loc[bus0]['geom']
                 geom1 = bus_df.loc[bus1]['geom']
                 line_geom['geom'].append(LineString([geom0, geom1]))
-            lines_df['geom'] = line_geom['geom'] 
-            
+            lines_df['geom'] = line_geom['geom']
+
 #            crs = {'init': 'epsg:4326'}
 #            lines_gdf = gpd.GeoDataFrame(lines_df, crs=crs, geometry=lines_df.geom)
 #            lines_gdf.plot()
-        
+
             for idx, row in lines_df.iterrows():
                 new_mv_lines = mv_lines()
                 new_mv_lines.name = idx
@@ -256,19 +256,19 @@ for result_id in result_ids:
                 new_mv_lines.v_nom = row['v_nom']
                 new_mv_lines.mv_grid = row['mv_grid']
                 new_mv_lines.result_id = row['result_id']
-                
+
                 new_mv_lines.geom = shape.from_shape(row['geom'], srid=4326)
-                
+
                 session.add(new_mv_lines)
-                
+
                 logger.info('Inserting line ' + str(idx) + ' to ram')
-                
-            logger.info('Commit to DB')    
+
+            logger.info('Commit to DB')
             session.commit()
-            
+
         except:
             logger.error('eDisGo results could not be written to DB',  exc_info=True)
             session.rollback()
-            continue     
-    
-             
+            continue
+
+

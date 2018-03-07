@@ -7,15 +7,15 @@ __copyright__ = "Flensburg University of Applied Sciences, Europa-Universität"\
 __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "maltesc"
 
-from sqlalchemy.orm import sessionmaker
-
+### Project Packages
 from etrago.appl import etrago
 from etrago.tools.io import results_to_oedb
-
-from tools.results import total_storage_charges
-
 from egoio.tools import db
 
+### Sub Packages
+
+### General Packages
+from sqlalchemy.orm import sessionmaker
 import logging
 
 ## Logging
@@ -23,12 +23,13 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger('corr_etrago_logger')
 
-fh = logging.FileHandler('corr_etrago.log')
+fh = logging.FileHandler('corr_etrago.log', mode='w')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 
 logger.addHandler(fh)
+
 
 ## eTraGo args
 args = {
@@ -44,7 +45,7 @@ args = {
   'minimize_loading': False,
   'network_clustering': False,
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
-  'parallelisation': True, # This is OK in my case cause no storage optimization. Macht alles nacheinander
+  'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
   'results': '~/maltesc/Git/eGo/ego/results',
