@@ -50,7 +50,7 @@ args = {
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
   'results': '~/maltesc/Git/eGo/ego/results',
-  'scn_name': 'Status Quo',
+  'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
