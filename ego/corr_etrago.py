@@ -21,7 +21,8 @@ import logging
 ## Logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
-logger = logging.getLogger('corr_etrago_logger')
+logger = logging.getLogger(__name__)
+pypsa_log = logging.getLogger('pypsa') # Listen to Pypsa
 
 fh = logging.FileHandler('corr_etrago.log', mode='w')
 fh.setLevel(logging.INFO)
@@ -29,7 +30,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 fh.setFormatter(formatter)
 
 logger.addHandler(fh)
-
+pypsa_log.addHandler(fh)
 
 ## eTraGo args
 args = {
@@ -49,7 +50,7 @@ args = {
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
   'results': '~/maltesc/Git/eGo/ego/results',
-  'scn_name': 'NEP 2035',
+  'scn_name': 'Status_Quo',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}

@@ -241,15 +241,20 @@ trafo_df = trafo_df.set_index('trafo_id')
 trafo_df['geom'] = trafo_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
 
+trafo_df['point_geom'] = trafo_df.apply(
+        lambda x: x['geom'].representative_point(), axis=1)
+
+
 crs = {'init': 'epsg:4326'}
-trafo_gdf = gpd.GeoDataFrame(trafo_df, crs=crs, geometry=trafo_df.geom)
+trafo_gdf = gpd.GeoDataFrame(trafo_df, crs=crs, geometry='point_geom')
 
 trafo_gdf['v_nom0'] = trafo_gdf.apply(
         lambda x: bus_gdf.loc[x['bus0']]['v_nom'], axis=1)
 trafo_gdf['v_nom1'] = trafo_gdf.apply(
         lambda x: bus_gdf.loc[x['bus1']]['v_nom'], axis=1)
 
-## Hier jetzt noch die Punktgeometrien der Trafos verwenden.
+
+
 ## Dann Hv/MV Verbindungen auch als Trafos eintragen und entsprechende Zeitreihen übernehmen
 ## Dann geeigneten räumlichen Buffer überlegen.
 
@@ -520,6 +525,12 @@ plot_df.plot(
         color='grey',
         linewidth=0.4,
         ax = ax1)
+plot_df = trafo_gdf
+plot_df.plot(
+        color='red',
+        markersize=200,
+        ax=ax1)
+
 
 ## Hier Trafos als Punkte Plotten.
 
