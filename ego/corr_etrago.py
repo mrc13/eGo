@@ -40,7 +40,7 @@ args = {
   'gridversion': None,
   'k_mean_clustering': False,
   'line_grouping': False, # gibt warnung aus. Soll garnicht so gut sei laut Clara
-  'load_shedding': False,
+  'load_shedding': True,
   'lpfile': False,
   'method': 'lopf',
   'minimize_loading': False,
