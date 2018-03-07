@@ -19,8 +19,6 @@ from egoio.db_tables import model_draft
 
 ## General Packages
 import pandas as pd
-
-import geopandas as gpd
 from shapely.geometry import Point, LineString
 import geoalchemy2.shape as shape
 from sqlalchemy.orm import sessionmaker
@@ -33,16 +31,18 @@ import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
+specs_logger = logging.getLogger('specs')
 
 fh = logging.FileHandler('corr_edisgo.log', mode='w')
-fh.setLevel(logging.INFO)
+fh.setLevel(logging.WARNING)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 
 logger.addHandler(fh)
+specs_logger.addHandler(fh)
 
 #Inputs
-ding0_files = '~/maltesc/Git/eGo/ego/data/ding0_grids'
+ding0_files = 'data/ding0_grids'
 result_ids = [359]
 
 ## Mapping
@@ -137,7 +137,7 @@ for result_id in result_ids:
                                         id=mv_grid_id,
                                         scenario=scenario)
         except:
-            logger.error('Scenario or Network could not be initiated',  exc_info=True)
+            logger.error('Scenario or Network could not be initiated for MV_grid ' + str(mv_grid_id),  exc_info=True)
             continue
 
         try:
