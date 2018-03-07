@@ -50,7 +50,7 @@ args = {
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
   'results': '~/maltesc/Git/eGo/ego/results',
-  'scn_name': 'NEP 2035',
+  'scn_name': 'SH Status Quo',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
@@ -58,7 +58,7 @@ args = {
 args['user_name'] = 'maltesc'
 ## eTraGo iteration parameters
 b_factor = [10.0]
-snapshots = [(1, 24)]
+snapshots = [(1, 2)]
 comments = ["24 Std NEP 2035 Sever Test"]
 
 try:
