@@ -32,7 +32,6 @@ logger.addHandler(fh)
 
 ## eTraGo args
 args = {
-  'branch_capacity_factor': 2.0,
   'db': 'oedb',
   'export': False,
   'generator_noise': True,
@@ -45,28 +44,26 @@ args = {
   'minimize_loading': False,
   'network_clustering': False,
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
-  'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
+  'parallelisation': True, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
-  'results': False,
-  'scn_name': 'Status Quo',
-  'skip_snapshots': False, 
+  'results': '~/maltesc/Git/eGo/ego/results',
+  'scn_name': 'NEP 2035',
+  'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
 
 args['user_name'] = 'maltesc'
 ## eTraGo iteration parameters
 b_factor = [10.0]
-snapshots = [(2920, 2944)]
-comments = ["24 Std in May, Status Quo"]
-    
+snapshots = [(1, 24)]
+comments = ["24 Std NEP 2035 Sever Test"]
+
 try:
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
-    
-#    session_local = local_db_access()
-    
+
 except:
     logger.error('Failed connection to one Database',  exc_info=True)
 
@@ -77,9 +74,9 @@ for b, s, c in zip(b_factor, snapshots, comments):
     args['start_snapshot'] = s[0]
     args['end_snapshot'] = s[1]
     args['comment'] = c
-    
+
     logger.info('eTraGo args: ' + str(args))
-    try:    
+    try:
     ## eTraGo Calculation
         logger.info('Start eTraGo calculations')
         eTraGo = etrago(args)
@@ -87,7 +84,7 @@ for b, s, c in zip(b_factor, snapshots, comments):
         logger.error('eTraGo returned Error',  exc_info=True)
     try:
         logger.info('Results to DB')
-        results_to_oedb(session, eTraGo, args) 
-        
+        results_to_oedb(session, eTraGo, args)
+
     except:
         logger.error('Could not save Results to DB',  exc_info=True)

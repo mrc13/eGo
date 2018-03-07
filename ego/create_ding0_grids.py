@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 ding0_log = logging.getLogger('ding0') # Also listen to ding0 logger
 
 log_path = os.getcwd()
-fh = logging.FileHandler(os.getcwd() + '/corr_ding0.log', mode='w')
+fh = logging.FileHandler('corr_ding0.log')
 fh.setLevel(logging.WARNING)
 fh.setFormatter(formatter)
 
@@ -100,13 +100,13 @@ def run_multiple_grid_districts(mv_grid_districts, run_id, failsafe=False,
     if base_path is None:
         base_path = BASEPATH
 
-   
+
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
-        
+
     corrupt_grid_districts = pd.DataFrame(columns=['id', 'message'])
-        
+
     for mvgd in mv_grid_districts:
         # instantiate ding0  network object
         nd = NetworkDing0(name='network', run_id=run_id)
@@ -127,7 +127,7 @@ def run_multiple_grid_districts(mv_grid_districts, run_id, failsafe=False,
             try:
                 msg = nd.run_ding0(session=session,
                          mv_grid_districts_no=[mvgd])
-                
+
                 # if not successful, put grid district to report
                 if msg:
                     corrupt_grid_districts = corrupt_grid_districts.append(
@@ -191,17 +191,17 @@ if __name__ == '__main__':
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
-    
+
     ormclass_hvmv_subst = model_draft.__getattribute__('EgoGridHvmvSubstation')
-    
+
     query = session.query(ormclass_hvmv_subst.otg_id,
                           ormclass_hvmv_subst.subst_id)
-    
+
     hvmv_trans_df = pd.DataFrame(query.all(),
                           columns=[column['name'] for
                                    column in
-                                   query.column_descriptions])  
-    
+                                   query.column_descriptions])
+
     # define grid district by its id (int)
     mv_grid_districts = list(hvmv_trans_df['subst_id'])
 
