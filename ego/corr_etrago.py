@@ -49,8 +49,8 @@ args = {
   'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
-  'results': False, #'~/maltesc/Git/eGo/ego/results'
-  'scn_name': 'SH Status Quo',
+  'results': '~/maltesc/Git/eGo/ego/results'
+  'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
@@ -59,7 +59,7 @@ args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
 b_factor = [10.0]
 snapshots = [(1, 2)]
-comments = ["2 Std SH Status Quo Sever Test"]
+comments = ["2 Std NEP Sever Test"]
 
 try:
     conn = db.connection(section='oedb')
@@ -84,9 +84,12 @@ for b, s, c in zip(b_factor, snapshots, comments):
         eTraGo = etrago(args)
     except:
         logger.error('eTraGo returned Error',  exc_info=True)
-#    try:
-#        logger.info('Results to DB')
-#        results_to_oedb(session, eTraGo, args)
-#
-#    except:
-#        logger.error('Could not save Results to DB',  exc_info=True)
+
+    ans = str(input("Want to save results (y/n)? "))
+    if ans == 'y':
+        try:
+            logger.info('Results to DB')
+            results_to_oedb(session, eTraGo, args)
+
+        except:
+            logger.error('Could not save Results to DB',  exc_info=True)
