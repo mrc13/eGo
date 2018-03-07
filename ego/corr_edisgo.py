@@ -19,7 +19,7 @@ from egoio.db_tables import model_draft
 
 ## General Packages
 import pandas as pd
-from shapely.geometry import Point, LineString
+from shapely.geometry import LineString
 import geoalchemy2.shape as shape
 from sqlalchemy.orm import sessionmaker
 
@@ -164,12 +164,6 @@ for result_id in result_ids:
             bus_df = pd.DataFrame(bus).set_index('name')
             bus_df = bus_df.join(network.pypsa.generators[['type', 'control']]) # Like this (right) join, only mv generators are included
 
-                ## Plotting:
-#            crs = {'init': 'epsg:4326'}
-#            bus_gdf = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
-#            bus_gdf.plot()
-
-
             for idx, row in bus_df.iterrows():
                 new_mv_bus = mv_buses()
                 new_mv_bus.name = idx
@@ -242,10 +236,6 @@ for result_id in result_ids:
                 geom1 = bus_df.loc[bus1]['geom']
                 line_geom['geom'].append(LineString([geom0, geom1]))
             lines_df['geom'] = line_geom['geom']
-
-#            crs = {'init': 'epsg:4326'}
-#            lines_gdf = gpd.GeoDataFrame(lines_df, crs=crs, geometry=lines_df.geom)
-#            lines_gdf.plot()
 
             for idx, row in lines_df.iterrows():
                 new_mv_lines = mv_lines()
