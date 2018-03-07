@@ -60,8 +60,8 @@ Session = sessionmaker(bind=conn)
 session = Session()
 
 # Processing
-result_id = 359
-brnch_fkt = 1. # In eTraGo used factor for branches
+result_id = 361
+brnch_fkt = 1.3 # In eTraGo used factor for branches
 hv_ov_fkt = 0.1 # When HV lines are considered overloaded
 mv_ov_fkt = 0.01
 
@@ -150,7 +150,10 @@ query = session.query(
         mv_lines.bus1,
         mv_lines.s_nom, # s_nom is in MVA
         mv_lines.s, # s is in KVA, changed futher down
-        mv_lines.v_nom
+        mv_lines.r,
+        mv_lines.x,
+        mv_lines.v_nom,
+        mv_lines.length
         ).filter(
                 mv_lines.result_id == result_id)
 
@@ -166,9 +169,6 @@ mv_line_df['geom'] = mv_line_df.apply(
 
 crs = {'init': 'epsg:4326'}
 mv_line_gdf = gpd.GeoDataFrame(mv_line_df, crs=crs, geometry=mv_line_df.geom)
-
-mv_line_gdf['length'] = mv_line_gdf.apply(
-        lambda x: transform(project, x['geom']).length / 1e3, axis=1)
 
 mv_line_gdf['s_nom_length_TVAkm'] = mv_line_gdf.apply(
         lambda x: (x['length'] * float(x['s_nom']))*1e-6, axis=1)
@@ -224,6 +224,29 @@ bus_gdf['p_mean'] = bus_gdf.apply( # Mean feed in
 
 feed_in_check = bus_gdf.p_mean.sum() # This must result in 0!
 
+## MV Buses
+query = session.query(
+        mv_buses.name,
+        mv_buses.v_nom,
+        mv_buses.geom,
+        mv_buses.p,
+        mv_buses.q
+        ).filter(
+                mv_buses.result_id == result_id)
+
+mv_bus_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+
+mv_bus_df = mv_bus_df.set_index('name')
+
+mv_bus_df['geom'] = mv_bus_df.apply(
+        lambda x: to_shape(x['geom']), axis=1)
+
+crs = {'init': 'epsg:4326'}
+mv_bus_gdf = gpd.GeoDataFrame(mv_bus_df, crs=crs, geometry='geom')
+
 ## Transformers
 query = session.query(
         ormclass_result_transformer.trafo_id,
@@ -275,10 +298,12 @@ mv_trafo_gdf['bus0'] = mv_trafo_df.apply(
 mv_trafo_gdf['bus1'] = mv_trafo_df.apply(
         lambda x: x['otg_id'], axis=1)
 
+mv_trafo_gdf = mv_trafo_gdf.merge(mv_bus_gdf, # Only the Trafos that can actualy be found in the MV buses....
+                                  left_on='bus0',
+                                  right_index=True,
+                                  how='inner')
 
-
-
-## Dann Hv/MV Verbindungen auch als Trafos eintragen und entsprechende Zeitreihen übernehmen
+## Zeitreihen für HV ud MV Trafos übernehmen (net Einispeisung etc. ablesbar)
 ## Dann geeigneten räumlichen Buffer überlegen.
 
 

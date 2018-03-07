@@ -24,6 +24,9 @@ class corr_mv_lines_results(Base):
     mv_grid = Column(BigInteger, primary_key=True)
     result_id = Column(Integer, primary_key=True)
     geom = Column(Geometry('LINESTRING', 4326))
+    x = Column(Float(53))
+    r = Column(Float(53))
+    length = Column(Float(53))
 
 class corr_mv_bus_results(Base):
     __tablename__ = 'corr_mv_bus_results'
@@ -35,8 +38,9 @@ class corr_mv_bus_results(Base):
     v_nom = Column(Float(53))
     v = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
     v_ang = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
+    p = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
+    q = Column(ARRAY(DOUBLE_PRECISION(precision=53)))
     mv_grid = Column(BigInteger, primary_key=True)
     result_id = Column(Integer, primary_key=True)
-    geom = Column(Geometry('POINT', 4326))       
-      
- 
+    geom = Column(Geometry('POINT', 4326))
+

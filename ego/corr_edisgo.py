@@ -7,38 +7,32 @@ __copyright__ = "Flensburg University of Applied Sciences, Europa-Universität"\
 __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
 __author__ = "maltesc"
 
+
+## Local Packages
+from tools.specs import get_etragospecs_from_db, get_mvgrid_from_bus_id, get_scn_name_from_result_id
+from tools import corr_io
+
+## Project Packages
+from edisgo.grid.network import Network, Scenario
+from egoio.tools import db
+from egoio.db_tables import model_draft
+
+## General Packages
 import pandas as pd
-
-from tools.plots import (make_all_plots,plot_line_loading, plot_stacked_gen,
-                                 add_coordinates, curtailment, gen_dist,
-                                 storage_distribution, igeoplot)
-from tools.utilities import get_scenario_setting, get_time_steps
-from tools.io import geolocation_buses, etrago_from_oedb
-from tools.results import total_storage_charges
-
-from edisgo.grid.network import Network, Scenario, TimeSeries, Results, ETraGoSpecs
-
-import networkx as nx
-import matplotlib.pyplot as plt
 
 import geopandas as gpd
 from shapely.geometry import Point, LineString
-from math import sqrt
 import geoalchemy2.shape as shape
-
-from sqlalchemy.ext.automap import automap_base
-
 from sqlalchemy.orm import sessionmaker
-from egoio.tools import db
-from egoio.db_tables import model_draft
-#from etrago.tools.io import results_to_oedb
-from ego.tools.specs import get_etragospecs_from_db, get_mvgrid_from_bus_id, get_scn_name_from_result_id
-from ego.tools import corr_io
-## Logging
+
+from math import sqrt, pi
+
 import logging
+
+## Logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
-logger = logging.getLogger('corr_edisgo_logger')
+logger = logging.getLogger(__name__)
 
 fh = logging.FileHandler('corr_edisgo.log', mode='w')
 fh.setLevel(logging.INFO)
@@ -47,29 +41,25 @@ fh.setFormatter(formatter)
 
 logger.addHandler(fh)
 
+#Inputs
+ding0_files = '~/maltesc/Git/eGo/ego/data/ding0_grids'
+result_ids = [359]
+
+## Mapping
+mv_lines = corr_io.corr_mv_lines_results
+mv_buses = corr_io.corr_mv_bus_results
+ormclass_result_bus = model_draft.EgoGridPfHvResultBus
+
 ## Connection and implicit mapping
 try:
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
-
-    from sqlalchemy import ARRAY, BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, Numeric, SmallInteger, String, Table, Text, UniqueConstraint, text
-    from geoalchemy2.types import Geometry, Raster
-    from sqlalchemy.orm import relationship
-    from sqlalchemy.dialects.postgresql.hstore import HSTORE
-    from sqlalchemy.dialects.postgresql.base import OID
-    from sqlalchemy.ext.declarative import declarative_base
-    from sqlalchemy.dialects.postgresql import ARRAY, DOUBLE_PRECISION, INTEGER, NUMERIC, TEXT, BIGINT, TIMESTAMP, VARCHAR
-
-    mv_lines = corr_io.corr_mv_lines_results
-    mv_buses = corr_io.corr_mv_bus_results
 except:
     logger.error('Failed connection to one Database',  exc_info=True)
 
-## Explicit Mapping
-ormclass_result_bus = model_draft.EgoGridPfHvResultBus
+# Start eDisgo
 
-result_ids = [361]
 for result_id in result_ids:
     logger.info('eDisGo with result_id: ' + str(result_id))
 
@@ -127,24 +117,23 @@ for result_id in result_ids:
         logger.info('MV grid found!')
         logger.info('MV grid ID: ' + str(mv_grid_id))
         try:
-#            specs = get_etragospecs_from_db(session, bus_id, result_id)
-            print('No Specs')
+            specs = get_etragospecs_from_db(session, bus_id, result_id)
         except:
             logger.error('Specs could not be retrieved',  exc_info=True)
             continue
 
         try:
-            file_path = '/home/student/Git/eGo/ego/data/grids/SH_model_draft/ding0_grids__' + str(mv_grid_id) + '.pkl'
-#            scenario = Scenario(etrago_specs=specs,
-#                        power_flow=(),
-#                        mv_grid_id=mv_grid_id,
-#                        scenario_name=scn_name)
-            scenario = Scenario(
-                        power_flow='worst-case',
+            ding0_file_path = ding0_files + '/ding0_grids__' + str(mv_grid_id) + '.pkl'
+            scenario = Scenario(etrago_specs=specs,
+                        power_flow=(),
                         mv_grid_id=mv_grid_id,
-                        scenario_name= scn_name)
+                        scenario_name=scn_name)
+#            scenario = Scenario(
+#                        power_flow='worst-case',
+#                        mv_grid_id=mv_grid_id,
+#                        scenario_name= scn_name)
 
-            network = Network.import_from_ding0(file_path,
+            network = Network.import_from_ding0(ding0_file_path,
                                         id=mv_grid_id,
                                         scenario=scenario)
         except:
@@ -198,6 +187,13 @@ for result_id in result_ids:
                 except:
                     new_mv_bus.v_ang = None
                     logger.warning("No voltage angle for bus " + str(idx))
+                try:
+                    new_mv_bus.p = network.pypsa.buses_t.p[pypsa_name]
+                    new_mv_bus.q = network.pypsa.buses_t.q[pypsa_name]
+                except:
+                    new_mv_bus.p = None
+                    new_mv_bus.q = None
+                    logger.warning("No p and q for bus " + str(idx))
                 new_mv_bus.mv_grid = mv_grid_id
                 new_mv_bus.result_id = result_id
 
@@ -213,18 +209,23 @@ for result_id in result_ids:
                     'bus0': [],
                     'bus1': [],
                     #'type': [],
-                    #'x': [],
-                    #'r': [],
+                    'x': [],
+                    'r': [],
                     's_nom': [], # Hier habe ich meine maximale Leistung
-                    #'length': []
+                    'length': []
                     }
 
+            omega = 2 * pi * 50
             for l in lines:
                 line['name'].append(repr(l['line']))
                 line['bus0'].append(l['adj_nodes'][0])
                 line['bus1'].append(l['adj_nodes'][1])
                 line['s_nom'].append(
                     sqrt(3) * l['line'].type['I_max_th'] * l['line'].type['U_n'] / 1e3)
+                line['x'].append(
+                        l['line'].type['L'] * omega / 1e3 * l['line'].length)
+                line['r'].append(l['line'].type['R'] * l['line'].length)
+                line['length'].append(l['line'].length)
 
             lines_df = pd.DataFrame(line).set_index('name')
 
@@ -256,6 +257,9 @@ for result_id in result_ids:
                 new_mv_lines.v_nom = row['v_nom']
                 new_mv_lines.mv_grid = row['mv_grid']
                 new_mv_lines.result_id = row['result_id']
+                new_mv_lines.x = row['x']
+                new_mv_lines.r = row['r']
+                new_mv_lines.length = row['length']
 
                 new_mv_lines.geom = shape.from_shape(row['geom'], srid=4326)
 
