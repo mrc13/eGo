@@ -42,7 +42,7 @@ logger.addHandler(fh)
 specs_logger.addHandler(fh)
 
 #Inputs
-ding0_files = 'data/ding0_grids'
+ding0_files = 'data/ding0_grids_SH'
 result_ids = [359]
 
 ## Mapping
