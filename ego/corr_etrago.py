@@ -46,18 +46,18 @@ args = {
   'minimize_loading': False,
   'network_clustering': False,
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
-  'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
+  'parallelisation': True, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
-  'results': False,#'~/maltesc/Git/eGo/ego/results',
-  'scn_name': 'Status Quo',
+  'results': 'results',
+  'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
 
 args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
-b_factor = [1.0]
+b_factor = [2.0]
 snapshots = [(1, 2)]
 comments = [""]
 
