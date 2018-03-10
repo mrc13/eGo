@@ -42,8 +42,8 @@ logger.addHandler(fh)
 specs_logger.addHandler(fh)
 
 #Inputs
-ding0_files = 'data/ding0_grids_SH'
-result_ids = [359]
+ding0_files = 'data/ding0_grids'
+result_ids = [383]
 
 ## Mapping
 mv_lines = corr_io.corr_mv_lines_results

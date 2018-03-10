@@ -48,7 +48,7 @@ args = {
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
   'parallelisation': True, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
-  'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
+  'reproduce_noise': 'noise_values.csv',
   'results': 'results',
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
@@ -57,8 +57,8 @@ args = {
 
 args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
-b_factor = [2.0]
-snapshots = [(1, 2)]
+b_factor = [None]
+snapshots = [(1, 168)]
 comments = [""]
 
 try:
