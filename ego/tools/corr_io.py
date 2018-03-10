@@ -44,3 +44,48 @@ class corr_mv_bus_results(Base):
     result_id = Column(Integer, primary_key=True)
     geom = Column(Geometry('POINT', 4326))
 
+
+## General Packages
+import pandas as pd
+import geopandas as gpd
+from geoalchemy2.shape import to_shape
+
+## Project Packages
+from egoio.db_tables import model_draft
+from egoio.db_tables import boundaries
+
+
+ormclass_line = model_draft.EgoGridPfHvLine
+ormclass_bus = model_draft.EgoGridPfHvBus
+ormclass_germ = boundaries.BkgVg2501Sta
+
+def get_cntry_links(session, scn_name):
+## Lines
+    query = session.query(
+            ormclass_line.line_id,
+            ormclass_line.topo
+            ).filter(
+                    ormclass_line.scn_name == scn_name)
+
+    line_df = pd.DataFrame(query.all(),
+                          columns=[column['name'] for
+                                   column in
+                                   query.column_descriptions])
+    line_df = line_df.set_index('line_id')
+
+    line_df['topo'] = line_df.apply(
+            lambda x: to_shape(x['topo']), axis=1)
+    crs = {'init': 'epsg:4326'}
+    line_gdf = gpd.GeoDataFrame(line_df, crs=crs, geometry=line_df.topo)
+
+
+    ## Boundaries
+    nuts_gdf = gpd.read_file("data/nuts/nuts.shp")
+    nuts_ger_gdf = nuts_gdf.loc[nuts_gdf['nuts_id'] == 'DE']['geometry'].values[0]
+
+    ## Calculation
+    line_gdf['within_ger'] = line_gdf.apply(
+            lambda x: x['topo'].within(nuts_ger_gdf), axis=1)
+
+    return line_gdf.loc[line_gdf['within_ger']==False].index.tolist()
+

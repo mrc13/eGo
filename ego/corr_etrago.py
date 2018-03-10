@@ -11,6 +11,7 @@ __author__ = "maltesc"
 from etrago.appl import etrago
 from etrago.tools.io import results_to_oedb
 from egoio.tools import db
+from ego.tools import corr_io
 
 ### Sub Packages
 
@@ -48,7 +49,7 @@ args = {
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
   'parallelisation': True, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
-  'reproduce_noise': False, # Das scheint so noch nich zu funkionieren....
+  'reproduce_noise': 'noise_values.csv',
   'results': 'results',
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
@@ -57,7 +58,7 @@ args = {
 
 args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
-b_factor = [2.0]
+b_factor = [10]
 snapshots = [(1, 2)]
 comments = [""]
 
@@ -69,6 +70,9 @@ try:
 except:
     logger.error('Failed connection to one Database',  exc_info=True)
 
+logger.info('Calculating Country Links')
+cntry_links = corr_io.get_cntry_links(session, args['scn_name'])
+args['cntry_links'] = cntry_links
 
 for b, s, c in zip(b_factor, snapshots, comments):
 
@@ -78,6 +82,7 @@ for b, s, c in zip(b_factor, snapshots, comments):
     args['comment'] = c
 
     logger.info('eTraGo args: ' + str(args))
+
     try:
     ## eTraGo Calculation
         logger.info('Start eTraGo calculations')
