@@ -32,6 +32,7 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 specs_logger = logging.getLogger('specs')
+network_logger = logging.getLogger('network')
 
 fh = logging.FileHandler('corr_edisgo.log', mode='w')
 fh.setLevel(logging.INFO)
@@ -40,6 +41,7 @@ fh.setFormatter(formatter)
 
 logger.addHandler(fh)
 specs_logger.addHandler(fh)
+network_logger.addHandler(fh)
 
 #Inputs
 ding0_files = 'data/ding0_grids'
