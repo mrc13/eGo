@@ -22,6 +22,7 @@ import pandas as pd
 from shapely.geometry import LineString
 import geoalchemy2.shape as shape
 from sqlalchemy.orm import sessionmaker
+import os.path
 
 from math import sqrt, pi
 
@@ -132,8 +133,11 @@ for idx, row in etrago_bus_df.iterrows():
         logger.error('Specs could not be retrieved',  exc_info=True)
         continue
 
+    ding0_file_path = ding0_files + '/ding0_grids__' + str(mv_grid_id) + '.pkl'
+    if not os.path.isfile(ding0_file_path):
+        logger.warning('Not MV grid file for MV grid ID: ' + str(mv_grid_id))
+        continue
     try:
-        ding0_file_path = ding0_files + '/ding0_grids__' + str(mv_grid_id) + '.pkl'
         scenario = Scenario(etrago_specs=specs,
                     power_flow=(),
                     mv_grid_id=mv_grid_id,
