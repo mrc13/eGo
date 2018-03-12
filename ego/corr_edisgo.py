@@ -136,6 +136,8 @@ for idx, row in etrago_bus_df.iterrows():
 
     try:
         network.analyze()
+        network.import_generators(types=['wind', 'solar'])
+
 #           network.reinforce()
     except:
         logger.error('Network could not be analyzed',  exc_info=True)

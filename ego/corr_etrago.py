@@ -59,7 +59,7 @@ args = {
 args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
 b_factor = [10]
-snapshots = [(1, 2)]
+snapshots = [(1, 168)]
 
 comments = [""]
 
