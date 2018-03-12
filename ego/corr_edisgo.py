@@ -42,8 +42,9 @@ logger.addHandler(fh)
 specs_logger.addHandler(fh)
 
 #Inputs
-ding0_files = 'data/ding0_grids_SH'
-result_id = 360
+ding0_files = 'data/ding0_grids'
+result_id = 384
+add_results = True
 
 ## Mapping
 mv_lines = corr_io.corr_mv_lines_results
@@ -64,18 +65,29 @@ except:
 
 logger.info('eDisGo with result_id: ' + str(result_id))
 
-try:
-    session.execute('''
-    DELETE FROM model_draft.corr_mv_lines_results
-        WHERE result_id = :result_id;
+if add_results == False:
+    try:
+        logger.info('Deleting old results')
+        session.execute('''
+        DELETE FROM model_draft.corr_mv_lines_results
+            WHERE result_id = :result_id;
 
-    DELETE FROM model_draft.corr_mv_bus_results
-        WHERE result_id = :result_id;
+        DELETE FROM model_draft.corr_mv_bus_results
+            WHERE result_id = :result_id;
 
-    ''', {'result_id': result_id})
-    session.commit()
-except:
-    logger.error('Clear old results failed',  exc_info=True)
+        ''', {'result_id': result_id})
+        session.commit()
+    except:
+        logger.error('Clear old results failed',  exc_info=True)
+    skip_grids = []
+else:
+    query = session.query(
+        mv_buses.mv_grid
+        ).filter(
+                        mv_buses.result_id == result_id).distinct()
+
+    skip_grids = [r[0] for r in query]
+
 try:
     scn_name = get_scn_name_from_result_id(session, result_id) # SH Status Quo becomes Status Quo
 except:
@@ -95,13 +107,18 @@ try:
                           columns=[column['name'] for
                                    column in
                                    query.column_descriptions])
+
+
     n_buses = len(etrago_bus_df)
 except:
     logger.error('Failed retrieve etrago buses',  exc_info=True)
 
 for idx, row in etrago_bus_df.iterrows():
     bus_id = row['bus_id']
-    mv_grid_id = 1816 # row['subst_id']
+    mv_grid_id = row['subst_id']
+    if mv_grid_id in skip_grids:
+        logger.info('Bus '+ str(bus_id) + ' with MV grid ' + str(mv_grid_id) + 'skipped, because result is already in db')
+        continue
 
     logger.info('Bus '+ str(bus_id) + ' with MV grid ' + str(mv_grid_id))
     progress = int(idx / n_buses * 100)
@@ -135,16 +152,19 @@ for idx, row in etrago_bus_df.iterrows():
         continue
 
     try:
-        network.analyze()
-        network.import_generators(types=['wind', 'solar'])
+        if scn_name == 'NEP 2035':
+            logger.info('Importing Generators')
+            network.import_generators(types=['wind', 'solar'])
 
-#           network.reinforce()
+        network.analyze()
+
     except:
-        logger.error('Network could not be analyzed',  exc_info=True)
+        logger.error('No Generators imported or Network could not be analyzed',  exc_info=True)
         continue
 
 #        costs = network.results.grid_expansion_costs
 #        print(costs)
+
     try:
         buses = network.mv_grid.graph.nodes()# network.mv_grid.graph represents a networkx container, and nodes are extracted
         bus = {'name': [], 'geom': []} # Dictionary of lists
@@ -172,24 +192,57 @@ for idx, row in etrago_bus_df.iterrows():
             except:
                 logger.warning("No voltage series for bus " + str(idx))
                 new_mv_bus.v = None
-            try:
-                new_mv_bus.v_ang = network.pypsa.buses_t.v_ang[pypsa_name]
-            except:
-                new_mv_bus.v_ang = None
-                logger.warning("No voltage angle for bus " + str(idx))
+#            try:
+#                new_mv_bus.v_ang = network.pypsa.buses_t.v_ang[pypsa_name]
+#            except:
+#                new_mv_bus.v_ang = None
+#                logger.warning("No voltage angle for bus " + str(idx))
             try:
                 new_mv_bus.p = network.pypsa.buses_t.p[pypsa_name]
                 new_mv_bus.q = network.pypsa.buses_t.q[pypsa_name]
             except:
                 new_mv_bus.p = None
                 new_mv_bus.q = None
-                logger.warning("No p and q for bus " + str(idx))
+#                logger.warning("No p and q for bus " + str(idx))
             new_mv_bus.mv_grid = mv_grid_id
             new_mv_bus.result_id = result_id
 
             new_mv_bus.geom = shape.from_shape(row['geom'], srid=4326)
             session.add(new_mv_bus)
-            logger.info('Inserting bus ' + str(idx) + ' to ram')
+#            logger.info('Inserting bus ' + str(idx) + ' to ram')
+
+
+#        exp_df = pd.concat([bus_df,
+#                            pd.DataFrame(columns=['v',
+#                                                  'v_ang',
+#                                                  'p',
+#                                                  'q'], index = bus_df.index)], axis=1)
+#
+##        exp_df['v_nom'] = grid_volt
+#        exp_df['mv_grid_id'] = mv_grid_id
+#
+#        n_mv_buses = len(exp_df)
+#        cnt=1
+#        for idx, row in exp_df.iterrows():
+#            cnt=cnt+1
+#            progress = int(cnt / n_mv_buses * 100)
+#            logger.info('Progess in MV grid: ' + str(mv_grid_id) + ': ' + str(progress) + ' %')
+#            pypsa_name = "Bus_" + str(idx)
+#
+#            try:
+#                exp_df.loc[idx]['v'] = network.results.v_res(nodes=None, level='mv')[idx].tolist()
+#            except:
+#                logger.warning("No voltage series for bus " + str(idx) + 'in MV grid ' + str(mv_grid_id))
+#            try:
+#                exp_df.loc[idx]['v_ang'] = network.pypsa.buses_t.v_ang[pypsa_name].tolist()
+#            except:
+#                logger.warning("No voltage angle for bus " + str(idx) + 'in MV grid ' + str(mv_grid_id))
+#            try:
+#                exp_df.loc[idx]['p'] = network.pypsa.buses_t.p[pypsa_name].tolist()
+#                exp_df.loc[idx]['q'] = network.pypsa.buses_t.q[pypsa_name].tolist()
+#            except:
+#                logger.warning("No p and q for bus " + str(idx) + 'in MV grid ' + str(mv_grid_id))
+
 
 
 #       pypsa_df = network.pypsa.buses[['v_nom', 'control']] # Hier stecken auch die LV grids drin! Brauche ich erstmal nicht, denn von den MVs ist das voltage level konstant!
@@ -251,9 +304,9 @@ for idx, row in etrago_bus_df.iterrows():
 
             session.add(new_mv_lines)
 
-            logger.info('Inserting line ' + str(idx) + ' to ram')
+#            logger.info('Inserting line ' + str(idx) + ' to ram')
 
-        logger.info('Commit to DB')
+        logger.info('Committing MV grid '+str(mv_grid_id)+ ' to DB')
         session.commit()
 
     except:
@@ -261,4 +314,4 @@ for idx, row in etrago_bus_df.iterrows():
         session.rollback()
         continue
 
-
+logger.info('eDisGo Calculation complete!')
