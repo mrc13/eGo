@@ -136,6 +136,7 @@ for result_id in result_ids:
             network = Network.import_from_ding0(ding0_file_path,
                                         id=mv_grid_id,
                                         scenario=scenario)
+            network.import_generators(types=['wind', 'solar'])
         except:
             logger.error('Scenario or Network could not be initiated for MV_grid ' + str(mv_grid_id),  exc_info=True)
             continue
