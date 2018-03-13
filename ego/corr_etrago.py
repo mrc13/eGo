@@ -51,15 +51,15 @@ args = {
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': 'noise_values.csv',
   'results': 'results',
-  'scn_name': 'SH Status Quo',#'NEP 2035',
+  'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
-  'storage_extendable': True}
+  'storage_extendable': False}
 
-args['user_name'] = 'guido_plessman' #'malte_scharf'
+args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
-b_factor = [1] ### ACHTUNG richtigen eTraGo branch aussuchen!!!!
-snapshots = [(3997, 4000)]
+b_factor = [None] ### ACHTUNG richtigen eTraGo branch aussuchen!!!!
+snapshots = [(1, 168)]
 
 comments = [""]
 
