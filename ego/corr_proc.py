@@ -22,8 +22,6 @@ from egoio.db_tables import model_draft
 from ego.tools.specs import get_scn_name_from_result_id
 from ego.tools import corr_io
 
-
-
 ## Logging
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
@@ -61,8 +59,8 @@ Session = sessionmaker(bind=conn)
 session = Session()
 
 # General inputs
-result_id = 359
-brnch_fkt = 1 # In eTraGo used factor for branches
+result_id = 384
+brnch_fkt = 1
 hv_ov_fkt = 0.7 # When HV lines are considered overloaded
 mv_ov_fkt = 0.5
 
