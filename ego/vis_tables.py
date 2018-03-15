@@ -11,6 +11,7 @@ from sqlalchemy.ext.automap import automap_base
 from egoio.tools import db
 from egoio.db_tables import model_draft
 
+
 ## Logging
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
@@ -29,35 +30,37 @@ try:
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
-    
+
 except:
     logger.error('Failed connection to Database',  exc_info=True)
- 
-try:  
+
+try:
     print("Decide on the Result to view")
-    result_id = int(input("Type result ID: "))  
-    
+    result_id = int(input("Type result ID: "))
+
     session.execute('''
     SELECT model_draft.corr_vis_result_id(:result_id);
     ''', {'result_id': result_id})
     session.commit()
+
 except:
     session.rollback()
     logger.error('Failed to visualize results',  exc_info=True)
-    
-try:       
+
+try:
     run = True
     while run:
-        fct = 1.0 # Multiplies s (resulting) with this factor in order to eliminate branch capacity factor   
-        snapshot = int(input("Type snapshot: "))  
-        
+
+        snapshot = int(input("Type snapshot: "))
+
         session.execute('''
-        SELECT model_draft.corr_update_srel(:snapshot, :fct);
-        ''', {'snapshot': snapshot, 'fct': fct})
+        SELECT model_draft.corr_update_srel(:snapshot);
+        ''', {'snapshot': snapshot})
         session.commit()
 except:
     session.rollback()
     logger.error('Something happened',  exc_info=True)
+
 
 
 

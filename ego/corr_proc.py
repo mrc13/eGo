@@ -13,6 +13,9 @@ import numpy as np
 import scipy
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
+import os
+from time import localtime, strftime
+
 
 ## Project Packages
 from egoio.tools import db
@@ -29,46 +32,73 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 fh = logging.FileHandler('corr_proc.log', mode='w')
-fh.setLevel(logging.WARNING)
+fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 
 logger.addHandler(fh)
 
 # Mapping
+## model_draft
 ormclass_result_meta = model_draft.EgoGridPfHvResultMeta
-ormclass_result_line = model_draft.EgoGridPfHvResultLine
-ormclass_result_bus = model_draft.EgoGridPfHvResultBus
-ormclass_result_line_t = model_draft.EgoGridPfHvResultLineT
-ormclass_result_bus_t = model_draft.EgoGridPfHvResultBusT
 ormclass_hvmv_subst = model_draft.EgoGridHvmvSubstation
-mv_lines = corr_io.corr_mv_lines_results
-mv_buses = corr_io.corr_mv_bus_results
 ormclass_result_transformer = model_draft.EgoGridPfHvResultTransformer
 ormclass_griddistricts = model_draft.EgoGridMvGriddistrict
+## corr
+ormclass_result_line = corr_io.corr_hv_lines_results
+ormclass_result_bus = corr_io.corr_hv_bus_results
+ormclass_result_line_t = corr_io.corr_hv_lines_t_result
+ormclass_result_bus_t = corr_io.corr_hv_bus_t_results
+mv_lines = corr_io.corr_mv_lines_results
+mv_buses = corr_io.corr_mv_bus_results
 
 
-# Plotting Base
-plot_dir = '/home/student/Dropbox/Masterarbeit/Thesis/graphics/pyplots/'
-#level_colors = pd.DataFrame({ 'lev' : [110., 220., 380.],
-#                              'color' : ['blue', 'green', 'orange']})
+# General inputs
+result_id = 384
+hv_ov_fkt = 0.7 # When HV lines are considered overloaded
+mv_ov_fkt = 0.5
+
+# Result Folder
+now = strftime("%Y-%m-%d %H:%M", localtime())
+result_dir = 'corr_results/' + str(result_id) + '/' + now + '/'
+plot_dir = result_dir
+
+if not os.path.exists(result_dir):
+    os.makedirs(result_dir)
+
+level_colors = {'LV': 'grey',
+                'MV': 'black',
+                'HV': 'blue',
+                'EHV220': 'green',
+                'EHV380': 'orange',
+                'unknown': 'grey'}
+
+def get_lev_from_volt (v_voltage): # in kV
+    try:
+        v = float(v_voltage)
+    except:
+        return None
+    if v <= 1:
+        return 'LV'
+    elif (v >= 3) & (v <= 30):
+        return 'MV'
+    elif (v >= 60) & (v <= 110):
+        return 'HV'
+    elif v == 220:
+        return 'EHV220'
+    elif v == 380:
+        return 'EHV380'
+    else: return 'unknown'
 
 # DB Access
 conn = db.connection(section='oedb')
 Session = sessionmaker(bind=conn)
 session = Session()
 
-# General inputs
-result_id = 384
-brnch_fkt = 1
-hv_ov_fkt = 0.7 # When HV lines are considered overloaded
-mv_ov_fkt = 0.5
-
-#%% Processing
-logger.info('Processing')
+#%% Metadata
+logger.info('Metadata')
 scn_name = get_scn_name_from_result_id(session, result_id)
 
-## Metadata
 meta_settings = session.query( # Here also the correct brnch_fkt can be found.
             ormclass_result_meta.settings
             ).filter(
@@ -83,7 +113,9 @@ snap_idx = session.query(
             ).scalar(
                     )
 
-## Lines
+#%% Lines
+# HV Lines
+logger.info('Lines')
 query = session.query(
         ormclass_result_line.line_id,
         ormclass_result_line.bus0,
@@ -91,11 +123,11 @@ query = session.query(
         ormclass_result_bus.v_nom,
         ormclass_result_line.cables,
         ormclass_result_line.frequency,
-        (ormclass_result_line.s_nom / brnch_fkt).label('s_nom'),
         ormclass_result_line.r,
         ormclass_result_line.x,
         ormclass_result_line.b,
         ormclass_result_line.g,
+        ormclass_result_line.s_nom,
         ormclass_result_line.topo,
         ormclass_result_line.geom,
         ormclass_result_line.length,
@@ -137,12 +169,9 @@ line_df['topo'] = line_df.apply(
         lambda x: to_shape(x['topo']), axis=1)
 
 crs = {'init': 'epsg:4326'}
-line_gdf = gpd.GeoDataFrame(line_df, crs=crs, geometry=line_df.topo)
-line_gdf.v_nom.unique()
-hv_levels = pd.unique(line_gdf['v_nom']).tolist()
+line_df = gpd.GeoDataFrame(line_df, crs=crs, geometry=line_df.topo)
 
-
-##MV Lines
+# MV Lines
 query = session.query(
         mv_lines.name,
         mv_lines.mv_grid,
@@ -169,26 +198,28 @@ mv_line_df['geom'] = mv_line_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
 
 crs = {'init': 'epsg:4326'}
-mv_line_gdf = gpd.GeoDataFrame(mv_line_df, crs=crs, geometry=mv_line_df.geom)
+mv_line_df = gpd.GeoDataFrame(mv_line_df, crs=crs, geometry=mv_line_df.geom)
 
-mv_line_gdf['s_nom_length_TVAkm'] = mv_line_gdf.apply(
+mv_line_df['s_nom_length_TVAkm'] = mv_line_df.apply(
         lambda x: (x['length'] * float(x['s_nom']))*1e-6, axis=1)
 
-mv_line_gdf['s'] = mv_line_gdf.apply( ## now s is in MVA
+mv_line_df['s'] = mv_line_df.apply( ## now s is in MVA
         lambda x: [s/1000 for s in x['s']], axis=1)
 
-mv_line_gdf['s_rel'] = mv_line_gdf.apply(
+mv_line_df['s_rel'] = mv_line_df.apply(
         lambda x: [s/float(x['s_nom']) for s in x['s']], axis=1)
 
-mv_line_gdf['s_over'] = mv_line_gdf.apply(
+mv_line_df['s_over'] = mv_line_df.apply(
         lambda x: [s_rel > mv_ov_fkt for s_rel in x['s_rel']], axis=1)
 
-mv_levels = pd.unique(mv_line_gdf['v_nom']).tolist()
-
+## Further Processing Information
+hv_levels = pd.unique(line_df['v_nom']).tolist()
+mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
 all_levels = mv_levels + hv_levels
 
 
-## Buses
+#%% Buses
+logger.info('Buses')
 query = session.query(
         ormclass_result_bus.bus_id,
         ormclass_result_bus.v_nom,
@@ -218,14 +249,12 @@ bus_df['geom'] = bus_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
 
 crs = {'init': 'epsg:4326'}
-bus_gdf = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
+bus_df = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
 
-bus_gdf['p_mean'] = bus_gdf.apply( # Mean feed in
+bus_df['p_mean'] = bus_df.apply( # Mean feed in
         lambda x: pd.Series(data= x['p']).mean(), axis=1)
 
-feed_in_check = bus_gdf.p_mean.sum() # This must result in 0!
-
-## MV Buses
+# MV Buses
 query = session.query(
         mv_buses.name,
         mv_buses.v_nom,
@@ -245,10 +274,21 @@ mv_bus_df = mv_bus_df.set_index('name')
 mv_bus_df['geom'] = mv_bus_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
 
-crs = {'init': 'epsg:4326'}
-mv_bus_gdf = gpd.GeoDataFrame(mv_bus_df, crs=crs, geometry='geom')
+mv_bus_df['p_mean'] = mv_bus_df.apply(
+        lambda x: pd.Series(data= x['p']).mean(), axis=1)
 
-## Transformers
+crs = {'init': 'epsg:4326'}
+mv_bus_df = gpd.GeoDataFrame(mv_bus_df, crs=crs, geometry='geom')
+
+## Further Processing Information and Checks
+
+feed_in_check = bus_df.p_mean.sum()
+if feed_in_check > 1.:
+    logger.warning('p_mean sum is not 0!')
+
+#%% Transformers
+logger.info('Transformers')
+# HV Transformers
 query = session.query(
         ormclass_result_transformer.trafo_id,
         ormclass_result_transformer.bus0,
@@ -271,21 +311,21 @@ trafo_df['point_geom'] = trafo_df.apply(
 
 
 crs = {'init': 'epsg:4326'}
-trafo_gdf = gpd.GeoDataFrame(trafo_df, crs=crs, geometry='point_geom')
+trafo_df = gpd.GeoDataFrame(trafo_df, crs=crs, geometry='point_geom')
 
-trafo_gdf['v_nom0'] = trafo_gdf.apply(
-        lambda x: bus_gdf.loc[x['bus0']]['v_nom'], axis=1)
-trafo_gdf['v_nom1'] = trafo_gdf.apply(
-        lambda x: bus_gdf.loc[x['bus1']]['v_nom'], axis=1)
+trafo_df['v_nom0'] = trafo_df.apply(
+        lambda x: bus_df.loc[x['bus0']]['v_nom'], axis=1)
+trafo_df['v_nom1'] = trafo_df.apply(
+        lambda x: bus_df.loc[x['bus1']]['v_nom'], axis=1)
 
-trafo_gdf['grid_buffer'] = trafo_gdf.apply(
+## Define spatial Buffer
+trafo_df['grid_buffer'] = trafo_df.apply(
         lambda x: x['point_geom'].buffer(0.1), axis=1) ## Buffergröße noch anpassen
 
-#trafo_gdf.set_geometry('grid_buffer', inplace=True)
-#trafo_gdf.plot()
+#trafo_df.set_geometry('grid_buffer', inplace=True)
+#trafo_df.plot()
 
-
-## MV Transformers
+# MV Transformers
 query = session.query(
         ormclass_hvmv_subst.point,
         ormclass_hvmv_subst.subst_id,
@@ -299,19 +339,19 @@ mv_trafo_df['point'] = mv_trafo_df.apply(
         lambda x: to_shape(x['point']), axis=1)
 
 crs = {'init': 'epsg:4326'}
-mv_trafo_gdf = gpd.GeoDataFrame(mv_trafo_df, crs=crs, geometry='point')
+mv_trafo_df = gpd.GeoDataFrame(mv_trafo_df, crs=crs, geometry='point')
 
-mv_trafo_gdf['bus0'] = mv_trafo_df.apply(
+mv_trafo_df['bus0'] = mv_trafo_df.apply(
         lambda x: 'MVStation_' + str(x['subst_id']), axis=1)
-mv_trafo_gdf['bus1'] = mv_trafo_df.apply(
+mv_trafo_df['bus1'] = mv_trafo_df.apply(
         lambda x: x['otg_id'], axis=1)
 
-mv_trafo_gdf = mv_trafo_gdf.merge(mv_bus_gdf, # Only the Trafos that can actualy be found in the MV buses....
+mv_trafo_df = mv_trafo_df.merge(mv_bus_df, # Only the Trafos that can actualy be found in the MV buses....
                                   left_on='bus0',
                                   right_index=True,
                                   how='inner')
 
-### Buffer and Grid Districts
+## Merge with griddistrict geoms
 query = session.query(ormclass_griddistricts.subst_id,
                       ormclass_griddistricts.geom)
 mv_griddistricts_df = pd.DataFrame(query.all(),
@@ -325,20 +365,113 @@ mv_griddistricts_df = mv_griddistricts_df.rename(
         columns={'geom': 'grid_buffer'})
 
 crs = {'init': 'epsg:3035'}
-mv_griddistricts_gdf = gpd.GeoDataFrame(mv_griddistricts_df,
+mv_griddistricts_df = gpd.GeoDataFrame(mv_griddistricts_df,
                                         crs=crs,
                                         geometry='grid_buffer')
-mv_griddistricts_gdf = mv_griddistricts_gdf.to_crs({'init': 'epsg:4326'})
+mv_griddistricts_df = mv_griddistricts_df.to_crs({'init': 'epsg:4326'})
 
-mv_trafo_gdf = mv_trafo_gdf.merge(mv_griddistricts_gdf,
+mv_trafo_df = mv_trafo_df.merge(mv_griddistricts_df,
                                   left_on='subst_id',
                                   right_index=True,
                                   how='left')
+del mv_griddistricts_df
+mv_trafo_df.head()
 
-#mv_trafo_gdf.set_geometry('grid_buffer', inplace=True)
-#mv_trafo_gdf.plot()
+#mv_trafo_df.set_geometry('grid_buffer', inplace=True)
+#mv_trafo_df.plot()
 
-## Dann geeigneten räumlichen Buffer überlegen.
+#%% All hvmv Substations
+logger.info('All hvmv Substations')
+query = session.query(
+        ormclass_result_bus.bus_id,
+        ormclass_hvmv_subst.subst_id
+        ).join(
+                ormclass_hvmv_subst,
+                ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id
+                ).filter(
+                        ormclass_result_bus.result_id == result_id)
+
+all_hvmv_subst_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+
+#%% Export processed results
+logger.info('Export processed Results')
+
+line_df.to_csv(result_dir + 'line_df.csv', encoding='utf-8')
+mv_line_df.to_csv(result_dir + 'mv_line_df.csv', encoding='utf-8')
+
+bus_df.to_csv(result_dir + 'bus_df.csv', encoding='utf-8')
+mv_bus_df.to_csv(result_dir + 'mv_bus_df.csv', encoding='utf-8')
+
+trafo_df.to_csv(result_dir + 'trafo_df.csv', encoding='utf-8')
+mv_trafo_df.to_csv(result_dir + 'mv_trafo_df.csv', encoding='utf-8')
+
+all_hvmv_subst_df.to_csv(result_dir + 'all_hvmv_subst_df.csv', encoding='utf-8')
+
+
+#%% Data Cleaning
+
+# ToDo: Clean out faulty MV grids, that e.g. have remote generators...
+
+#%% Basic grid information
+logger.info('Basic grid information')
+
+# MV single
+index = mv_line_df.mv_grid.unique()
+columns = []
+mv_grids_df = pd.DataFrame(index=index, columns=columns)
+
+mv_grids_df['length in km'] = mv_line_df.groupby(['mv_grid'])['length'].sum()
+mv_grids_df['Transm. cap. in MVAkm'] = \
+    mv_line_df.groupby(['mv_grid'])['s_nom_length_TVAkm'].sum() *1e3
+
+mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
+                                              'p_mean']].set_index('subst_id')
+
+mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
+                            [['MV_grid_id','p_mean']].set_index('MV_grid_id')
+
+
+
+
+
+# MV total
+columns = ['MV']
+index =   ['Tot. no. of grids',
+           'No. of calc. grids',
+           'Perc. of calc. grids',
+           'Tot. calc. length in km',
+           'Av. len. per grid in km',
+           'Estim. tot. len. in km']
+mv_grid_info_df = pd.DataFrame(index=index, columns=columns)
+
+mv_grid_info_df.loc['Tot. no. of grids']['MV'] = len(all_hvmv_subst_df)
+
+mv_grid_info_df.loc['No. of calc. grids']['MV'] = len(mv_line_df.mv_grid.unique())
+
+mv_grid_info_df.loc['Perc. of calc. grids']['MV'] = round(
+        mv_grid_info_df.loc['No. of calc. grids']['MV']\
+        / mv_grid_info_df.loc['Tot. no. of grids']['MV'] * 100, 2)
+
+mv_grid_info_df.loc['Tot. calc. length in km']['MV'] = round(
+        mv_line_df['length'].sum(), 2)
+
+mv_grid_info_df.loc['Av. len. per grid in km']['MV'] = round(
+        mv_grids_df['length'].mean(), 2)
+
+mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round(
+        mv_grid_info_df.loc['Av. len. per grid in km']['MV'] *\
+        mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
+
+
+
+
+
+
+
+
 
 #%% Plot and Output Data Processing
 logger.info('Plot and Output Data Processing')
@@ -399,6 +532,28 @@ for column in s_sum_over_rel_t:
 
 #%% Plots
 logger.info('Plottig')
+
+#### Scatter Plot
+plt_name = "MV/HV Comparison"
+fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(10,10)
+
+mv_grids_df.plot.scatter(
+        x='Avg. feed-in MV',
+        y='Avg. feed-in HV',
+        color='blue',
+        label='MV/HV Comparison',
+        ax=ax1)
+
+ax1.plot([-250, 200],
+         [-250, 200],
+         ls="--",
+         color='red')
+
+file_name = 'feed-in_comparison'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
+
 
 ### Plot and Corr
 #### Line Plot
@@ -603,7 +758,7 @@ plot_df.plot(
         color='grey',
         linewidth=0.4,
         ax = ax1)
-
+# HTis is acutally not correct!!!!!
 plot_df= bus_gdf.loc[(~np.isnan(bus_gdf['MV_grid_id'])) & (bus_gdf['p_mean']>=0)]
 plot_df.plot(
         markersize= plot_df['p_mean']*marker_sz_mltp,

@@ -217,40 +217,6 @@ for idx, row in etrago_bus_df.iterrows():
             session.add(new_mv_bus)
 #            logger.info('Inserting bus ' + str(idx) + ' to ram')
 
-
-#        exp_df = pd.concat([bus_df,
-#                            pd.DataFrame(columns=['v',
-#                                                  'v_ang',
-#                                                  'p',
-#                                                  'q'], index = bus_df.index)], axis=1)
-#
-##        exp_df['v_nom'] = grid_volt
-#        exp_df['mv_grid_id'] = mv_grid_id
-#
-#        n_mv_buses = len(exp_df)
-#        cnt=1
-#        for idx, row in exp_df.iterrows():
-#            cnt=cnt+1
-#            progress = int(cnt / n_mv_buses * 100)
-#            logger.info('Progess in MV grid: ' + str(mv_grid_id) + ': ' + str(progress) + ' %')
-#            pypsa_name = "Bus_" + str(idx)
-#
-#            try:
-#                exp_df.loc[idx]['v'] = network.results.v_res(nodes=None, level='mv')[idx].tolist()
-#            except:
-#                logger.warning("No voltage series for bus " + str(idx) + 'in MV grid ' + str(mv_grid_id))
-#            try:
-#                exp_df.loc[idx]['v_ang'] = network.pypsa.buses_t.v_ang[pypsa_name].tolist()
-#            except:
-#                logger.warning("No voltage angle for bus " + str(idx) + 'in MV grid ' + str(mv_grid_id))
-#            try:
-#                exp_df.loc[idx]['p'] = network.pypsa.buses_t.p[pypsa_name].tolist()
-#                exp_df.loc[idx]['q'] = network.pypsa.buses_t.q[pypsa_name].tolist()
-#            except:
-#                logger.warning("No p and q for bus " + str(idx) + 'in MV grid ' + str(mv_grid_id))
-
-
-
 #       pypsa_df = network.pypsa.buses[['v_nom', 'control']] # Hier stecken auch die LV grids drin! Brauche ich erstmal nicht, denn von den MVs ist das voltage level konstant!
 
         lines = network.mv_grid.graph.lines()
