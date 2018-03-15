@@ -240,10 +240,10 @@ query = session.query(
         ormclass_result_gen.generator_id, # This ID is an aggregate ID (single generators aggregated)
         ormclass_result_gen.bus,
         ormclass_result_gen.p_nom,
-        ormclass_source.name#,
-#        ormclass_result_gen_t.p
-#        ).join(ormclass_result_gen_t,
-#               ormclass_result_gen_t.generator_id == ormclass_result_gen.generator_id
+        ormclass_source.name,
+        ormclass_result_gen_t.p
+        ).join(ormclass_result_gen_t,
+               ormclass_result_gen_t.generator_id == ormclass_result_gen.generator_id
                 ).join(
                 ormclass_source,
                 ormclass_source.source_id == ormclass_result_gen.source
@@ -252,13 +252,13 @@ gens_df = pd.DataFrame(query.all(),
                       columns=[column['name'] for
                                column in
                                query.column_descriptions])
-
-#gens_df['p_mean'] = np.nan
-#for index, row in gens_df.iterrows():
-#    try:
-#        gens_df.loc[index]['p_mean'] = pd.Series(data=row['p']).mean()
-#    except:
-#        gens_df.loc[index]['p_mean'] = np.nan
+gens_df = gens_df.set_index('generator_id')
+gens_df['p_mean'] = np.nan
+for index, row in gens_df.iterrows():
+    try:
+        gens_df.loc[index]['p_mean'] = pd.Series(data=row['p']).mean()
+    except:
+        gens_df.loc[index]['p_mean'] = np.nan
 #gens_df = gens_df.drop(['p'], axis=1)
 
 gens_df.to_csv(result_dir + 'gens_df.csv', encoding='utf-8')

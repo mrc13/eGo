@@ -9,10 +9,10 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import scipy
+import os
 
-from shapely.geometry import shape
 import shapely.wkt
-
+from time import localtime, strftime
 from matplotlib import pyplot as plt
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
@@ -34,6 +34,11 @@ logger.addHandler(fh)
 result_id = 384
 data_set = '2018-03-15'
 result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + data_set + '/'
+
+now = strftime("%Y-%m-%d %H:%M", localtime())
+analysis_dir = 'corr_results/' + str(result_id) + '/analysis/' + now + '/'
+if not os.path.exists(analysis_dir):
+    os.makedirs(analysis_dir)
 
 #%% Data import
 try:
@@ -115,6 +120,7 @@ mv_trafo_df['grid_buffer'] = mv_griddistricts_df
 
 del mv_griddistricts_df
 
+
 #%% Data Cleaning
 
 # ToDo: Clean out faulty MV grids, that e.g. have remote generators...
@@ -176,10 +182,21 @@ mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
                             [['MV_grid_id','p_mean']].set_index('MV_grid_id')
 
 # ToDo: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
+# ToDo: Hierfür besser direkt über eDisGo Generatoren arbeiten.
+
+mv_gens_df = gens_df.merge(all_hvmv_subst_df,
+              how='inner',
+              left_on='bus',
+              right_on='bus_id')
+
+mv_gens_df = mv_gens_df[mv_gens_df['name'] != 'load shedding']
+mv_gens_df = mv_gens_df.dropna() # I think this is also load shedding
+## Find out how much load shedding is done...
+
+mv_grids_df['Inst. gen. capacity'] = mv_gens_df.groupby(['subst_id'])['p_nom'].sum()
 
 
-## Put more gen infromation here...
-
+mv_grids_df.to_csv(analysis_dir + 'mv_grids_df.csv', encoding='utf-8')
 
 # MV total
 columns = ['MV']
@@ -187,8 +204,10 @@ index =   ['Tot. no. of grids',
            'No. of calc. grids',
            'Perc. of calc. grids',
            'Tot. calc. length in km',
-           'Av. len. per grid in km',
-           'Estim. tot. len. in km']
+           'Avg. len. per grid in km',
+           'Estim. tot. len. in km',
+           'Avg. transm. cap. in MVAkm',
+           'Estim. tot. trans cap. in MVAkm']
 mv_grid_info_df = pd.DataFrame(index=index, columns=columns)
 
 mv_grid_info_df.loc['Tot. no. of grids']['MV'] = len(all_hvmv_subst_df)
@@ -202,13 +221,21 @@ mv_grid_info_df.loc['Perc. of calc. grids']['MV'] = round(
 mv_grid_info_df.loc['Tot. calc. length in km']['MV'] = round(
         mv_line_df['length'].sum(), 2)
 
-mv_grid_info_df.loc['Av. len. per grid in km']['MV'] = round(
+mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] = round(
         mv_grids_df['length in km'].mean(), 2)
 
 mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round(
-        mv_grid_info_df.loc['Av. len. per grid in km']['MV'] *\
+        mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] *\
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
 
+mv_grid_info_df.loc['Avg. transm. cap. in MVAkm']['MV'] = round(
+        mv_grids_df['Transm. cap. in MVAkm'].mean(), 2)
+
+mv_grid_info_df.loc['Estim. tot. trans cap. in MVAkm']['MV'] = round(
+        mv_grid_info_df.loc['Avg. transm. cap. in MVAkm']['MV'] *\
+        mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
+
+mv_grid_info_df.to_csv(analysis_dir + 'mv_grid_info_df.csv', encoding='utf-8')
 
 # HV Total
 columns = ['HV', 'EHV220', 'EHV380']
@@ -218,8 +245,9 @@ grid_info_df = pd.DataFrame(index=index, columns=columns)
 
 for col in columns:
     grid_info_df.loc['Total. len. in km'][col] = round(
-            line_df.loc[line_df['v_nom'] == get_volt_from_lev (col)]['length'].sum(), 2)
+            line_df.loc[line_df['v_nom'] == get_volt_from_lev(col)]['length'].sum(), 2)
 
+grid_info_df.to_csv(analysis_dir + 'grid_info_df.csv', encoding='utf-8')
 
 # HV/MV Comparison
 columns = ['MV', 'HV', 'EHV220', 'EHV380']
@@ -233,7 +261,7 @@ for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. len. in km'][col] = grid_info_df.loc['Total. len. in km'][col]
 
 
-
+hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf-8')
 
 
 #%% Plot and Output Data Processing
