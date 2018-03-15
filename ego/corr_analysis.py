@@ -148,6 +148,14 @@ def get_lev_from_volt (v_voltage): # in kV
     elif v == 380:
         return 'EHV380'
     else: return 'unknown'
+def get_volt_from_lev (v_lev):
+    if v_lev == 'HV':
+        return 110.
+    elif v_lev == 'EHV220':
+        return 220.
+    elif v_lev == 'EHV380':
+        return 380.
+    else: return None
 
 #%% Basic grid information
 logger.info('Basic grid information')
@@ -166,6 +174,11 @@ mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
 
 mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
                             [['MV_grid_id','p_mean']].set_index('MV_grid_id')
+
+# ToDo: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
+
+
+## Put more gen infromation here...
 
 
 # MV total
@@ -197,8 +210,27 @@ mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round(
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
 
 
+# HV Total
+columns = ['HV', 'EHV220', 'EHV380']
+index =   ['Total. len. in km',
+           'Something']
+grid_info_df = pd.DataFrame(index=index, columns=columns)
+
+for col in columns:
+    grid_info_df.loc['Total. len. in km'][col] = round(
+            line_df.loc[line_df['v_nom'] == get_volt_from_lev (col)]['length'].sum(), 2)
 
 
+# HV/MV Comparison
+columns = ['MV', 'HV', 'EHV220', 'EHV380']
+index =   ['Total. len. in km',
+           'Something']
+hvmv_comparison_df = pd.DataFrame(index=index, columns=columns)
+
+hvmv_comparison_df.loc['Total. len. in km']['MV'] = mv_grid_info_df.loc['Estim. tot. len. in km']['MV']
+
+for col in grid_info_df.columns:
+    hvmv_comparison_df.loc['Total. len. in km'][col] = grid_info_df.loc['Total. len. in km'][col]
 
 
 
