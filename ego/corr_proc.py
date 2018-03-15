@@ -6,7 +6,6 @@ Corr Processing
 ## General Packages
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
-import geopandas as gpd
 from geoalchemy2.shape import to_shape
 
 import os
@@ -138,8 +137,8 @@ line_df['geom'] = line_df.apply(
 line_df['topo'] = line_df.apply(
         lambda x: to_shape(x['topo']), axis=1)
 
-crs = {'init': 'epsg:4326'}
-line_df = gpd.GeoDataFrame(line_df, crs=crs, geometry=line_df.topo)
+#crs = {'init': 'epsg:4326'}
+#line_df = gpd.GeoDataFrame(line_df, crs=crs, geometry=line_df.topo)
 
 # MV Lines
 query = session.query(
@@ -167,8 +166,8 @@ mv_line_df = mv_line_df.set_index('name')
 mv_line_df['geom'] = mv_line_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
 
-crs = {'init': 'epsg:4326'}
-mv_line_df = gpd.GeoDataFrame(mv_line_df, crs=crs, geometry=mv_line_df.geom)
+#crs = {'init': 'epsg:4326'}
+#mv_line_df = gpd.GeoDataFrame(mv_line_df, crs=crs, geometry=mv_line_df.geom)
 
 mv_line_df['s_nom_length_TVAkm'] = mv_line_df.apply(
         lambda x: (x['length'] * float(x['s_nom']))*1e-6, axis=1)
@@ -212,8 +211,8 @@ bus_df = bus_df.set_index('bus_id')
 bus_df['geom'] = bus_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
 
-crs = {'init': 'epsg:4326'}
-bus_df = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
+#crs = {'init': 'epsg:4326'}
+#bus_df = gpd.GeoDataFrame(bus_df, crs=crs, geometry=bus_df.geom)
 
 bus_df['p_mean'] = bus_df.apply( # Mean feed in
         lambda x: pd.Series(data= x['p']).mean(), axis=1)
@@ -241,8 +240,8 @@ mv_bus_df['geom'] = mv_bus_df.apply(
 mv_bus_df['p_mean'] = mv_bus_df.apply(
         lambda x: pd.Series(data= x['p']).mean(), axis=1)
 
-crs = {'init': 'epsg:4326'}
-mv_bus_df = gpd.GeoDataFrame(mv_bus_df, crs=crs, geometry='geom')
+#crs = {'init': 'epsg:4326'}
+#mv_bus_df = gpd.GeoDataFrame(mv_bus_df, crs=crs, geometry='geom')
 
 bus_df.to_csv(result_dir + 'bus_df.csv', encoding='utf-8')
 mv_bus_df.to_csv(result_dir + 'mv_bus_df.csv', encoding='utf-8')
@@ -290,9 +289,8 @@ trafo_df['geom'] = trafo_df.apply(
 trafo_df['point_geom'] = trafo_df.apply(
         lambda x: x['geom'].representative_point(), axis=1)
 
-
-crs = {'init': 'epsg:4326'}
-trafo_df = gpd.GeoDataFrame(trafo_df, crs=crs, geometry='point_geom')
+#crs = {'init': 'epsg:4326'}
+#trafo_df = gpd.GeoDataFrame(trafo_df, crs=crs, geometry='point_geom')
 
 trafo_df['v_nom0'] = trafo_df.apply(
         lambda x: bus_df.loc[x['bus0']]['v_nom'], axis=1)
@@ -319,8 +317,8 @@ mv_trafo_df = pd.DataFrame(query.all(),
 mv_trafo_df['point'] = mv_trafo_df.apply(
         lambda x: to_shape(x['point']), axis=1)
 
-crs = {'init': 'epsg:4326'}
-mv_trafo_df = gpd.GeoDataFrame(mv_trafo_df, crs=crs, geometry='point')
+#crs = {'init': 'epsg:4326'}
+#mv_trafo_df = gpd.GeoDataFrame(mv_trafo_df, crs=crs, geometry='point')
 
 mv_trafo_df['bus0'] = mv_trafo_df.apply(
         lambda x: 'MVStation_' + str(x['subst_id']), axis=1)
@@ -345,11 +343,11 @@ mv_griddistricts_df['geom'] = mv_griddistricts_df.apply(
 mv_griddistricts_df = mv_griddistricts_df.rename(
         columns={'geom': 'grid_buffer'})
 
-crs = {'init': 'epsg:3035'}
-mv_griddistricts_df = gpd.GeoDataFrame(mv_griddistricts_df,
-                                        crs=crs,
-                                        geometry='grid_buffer')
-mv_griddistricts_df = mv_griddistricts_df.to_crs({'init': 'epsg:4326'})
+#crs = {'init': 'epsg:3035'}
+#mv_griddistricts_df = gpd.GeoDataFrame(mv_griddistricts_df,
+#                                        crs=crs,
+#                                        geometry='grid_buffer')
+#mv_griddistricts_df = mv_griddistricts_df.to_crs({'init': 'epsg:4326'})
 
 mv_trafo_df = mv_trafo_df.merge(mv_griddistricts_df,
                                   left_on='subst_id',
