@@ -8,11 +8,7 @@ from sqlalchemy.orm import sessionmaker
 import pandas as pd
 import geopandas as gpd
 from geoalchemy2.shape import to_shape
-from matplotlib import pyplot as plt
-import numpy as np
-import scipy
-from sklearn import linear_model
-from sklearn.metrics import mean_squared_error, r2_score
+
 import os
 from time import localtime, strftime
 
@@ -44,51 +40,26 @@ ormclass_result_meta = model_draft.EgoGridPfHvResultMeta
 ormclass_hvmv_subst = model_draft.EgoGridHvmvSubstation
 ormclass_result_transformer = model_draft.EgoGridPfHvResultTransformer
 ormclass_griddistricts = model_draft.EgoGridMvGriddistrict
+ormclass_result_gen = model_draft.EgoGridPfHvResultGenerator
+ormclass_result_gen_t = model_draft.EgoGridPfHvResultGeneratorT
+ormclass_result_line = model_draft.EgoGridPfHvResultLine
+ormclass_result_bus = model_draft.EgoGridPfHvResultBus
+ormclass_result_line_t = model_draft.EgoGridPfHvResultLineT
+ormclass_result_bus_t = model_draft.EgoGridPfHvResultBusT
+ormclass_source = model_draft.EgoGridPfHvSource
 ## corr
-ormclass_result_line = corr_io.corr_hv_lines_results
-ormclass_result_bus = corr_io.corr_hv_bus_results
-ormclass_result_line_t = corr_io.corr_hv_lines_t_result
-ormclass_result_bus_t = corr_io.corr_hv_bus_t_results
 mv_lines = corr_io.corr_mv_lines_results
 mv_buses = corr_io.corr_mv_bus_results
 
-
 # General inputs
-result_id = 384
-hv_ov_fkt = 0.7 # When HV lines are considered overloaded
-mv_ov_fkt = 0.5
+result_id = int(input("Type result ID: "))
 
 # Result Folder
-now = strftime("%Y-%m-%d %H:%M", localtime())
-result_dir = 'corr_results/' + str(result_id) + '/' + now + '/'
-plot_dir = result_dir
+now = strftime("%Y-%m-%d", localtime())
+result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + now + '/'
 
 if not os.path.exists(result_dir):
     os.makedirs(result_dir)
-
-level_colors = {'LV': 'grey',
-                'MV': 'black',
-                'HV': 'blue',
-                'EHV220': 'green',
-                'EHV380': 'orange',
-                'unknown': 'grey'}
-
-def get_lev_from_volt (v_voltage): # in kV
-    try:
-        v = float(v_voltage)
-    except:
-        return None
-    if v <= 1:
-        return 'LV'
-    elif (v >= 3) & (v <= 30):
-        return 'MV'
-    elif (v >= 60) & (v <= 110):
-        return 'HV'
-    elif v == 220:
-        return 'EHV220'
-    elif v == 380:
-        return 'EHV380'
-    else: return 'unknown'
 
 # DB Access
 conn = db.connection(section='oedb')
@@ -112,6 +83,8 @@ snap_idx = session.query(
             ormclass_result_meta.result_id == result_id
             ).scalar(
                     )
+
+pd.Series(snap_idx).to_csv(result_dir + 'snap_idx', encoding='utf-8')
 
 #%% Lines
 # HV Lines
@@ -158,9 +131,6 @@ line_df['s'] = line_df.apply(
 
 line_df['s_rel'] = line_df.apply(
         lambda x: [s/float(x['s_nom']) for s in x['s']], axis=1)
-
-line_df['s_over'] = line_df.apply(
-        lambda x: [s_rel > hv_ov_fkt for s_rel in x['s_rel']], axis=1)
 
 line_df['geom'] = line_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
@@ -209,14 +179,8 @@ mv_line_df['s'] = mv_line_df.apply( ## now s is in MVA
 mv_line_df['s_rel'] = mv_line_df.apply(
         lambda x: [s/float(x['s_nom']) for s in x['s']], axis=1)
 
-mv_line_df['s_over'] = mv_line_df.apply(
-        lambda x: [s_rel > mv_ov_fkt for s_rel in x['s_rel']], axis=1)
-
-## Further Processing Information
-hv_levels = pd.unique(line_df['v_nom']).tolist()
-mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
-all_levels = mv_levels + hv_levels
-
+line_df.to_csv(result_dir + 'line_df.csv', encoding='utf-8')
+mv_line_df.to_csv(result_dir + 'mv_line_df.csv', encoding='utf-8')
 
 #%% Buses
 logger.info('Buses')
@@ -280,11 +244,28 @@ mv_bus_df['p_mean'] = mv_bus_df.apply(
 crs = {'init': 'epsg:4326'}
 mv_bus_df = gpd.GeoDataFrame(mv_bus_df, crs=crs, geometry='geom')
 
-## Further Processing Information and Checks
+bus_df.to_csv(result_dir + 'bus_df.csv', encoding='utf-8')
+mv_bus_df.to_csv(result_dir + 'mv_bus_df.csv', encoding='utf-8')
 
-feed_in_check = bus_df.p_mean.sum()
-if feed_in_check > 1.:
-    logger.warning('p_mean sum is not 0!')
+#%% Generators
+logger.info('Generators')
+query = session.query(
+        ormclass_result_gen.generator_id, # This ID is an aggregate ID (single generators aggregated)
+        ormclass_result_gen.p_nom,
+        ormclass_source.name,
+        ormclass_result_gen_t.p
+        ).join(ormclass_result_gen_t,
+               ormclass_result_gen_t.generator_id == ormclass_result_gen.generator_id
+                ).join(
+                ormclass_source,
+                ormclass_source.source_id == ormclass_result_gen.source
+                )
+gens_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+
+gens_df.to_csv(result_dir + 'gens_df.csv', encoding='utf-8')
 
 #%% Transformers
 logger.info('Transformers')
@@ -377,8 +358,8 @@ mv_trafo_df = mv_trafo_df.merge(mv_griddistricts_df,
 del mv_griddistricts_df
 mv_trafo_df.head()
 
-#mv_trafo_df.set_geometry('grid_buffer', inplace=True)
-#mv_trafo_df.plot()
+trafo_df.to_csv(result_dir + 'trafo_df.csv', encoding='utf-8')
+mv_trafo_df.to_csv(result_dir + 'mv_trafo_df.csv', encoding='utf-8')
 
 #%% All hvmv Substations
 logger.info('All hvmv Substations')
@@ -396,428 +377,4 @@ all_hvmv_subst_df = pd.DataFrame(query.all(),
                                column in
                                query.column_descriptions])
 
-#%% Export processed results
-logger.info('Export processed Results')
-
-line_df.to_csv(result_dir + 'line_df.csv', encoding='utf-8')
-mv_line_df.to_csv(result_dir + 'mv_line_df.csv', encoding='utf-8')
-
-bus_df.to_csv(result_dir + 'bus_df.csv', encoding='utf-8')
-mv_bus_df.to_csv(result_dir + 'mv_bus_df.csv', encoding='utf-8')
-
-trafo_df.to_csv(result_dir + 'trafo_df.csv', encoding='utf-8')
-mv_trafo_df.to_csv(result_dir + 'mv_trafo_df.csv', encoding='utf-8')
-
 all_hvmv_subst_df.to_csv(result_dir + 'all_hvmv_subst_df.csv', encoding='utf-8')
-
-
-#%% Data Cleaning
-
-# ToDo: Clean out faulty MV grids, that e.g. have remote generators...
-
-#%% Basic grid information
-logger.info('Basic grid information')
-
-# MV single
-index = mv_line_df.mv_grid.unique()
-columns = []
-mv_grids_df = pd.DataFrame(index=index, columns=columns)
-
-mv_grids_df['length in km'] = mv_line_df.groupby(['mv_grid'])['length'].sum()
-mv_grids_df['Transm. cap. in MVAkm'] = \
-    mv_line_df.groupby(['mv_grid'])['s_nom_length_TVAkm'].sum() *1e3
-
-mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
-                                              'p_mean']].set_index('subst_id')
-
-mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
-                            [['MV_grid_id','p_mean']].set_index('MV_grid_id')
-
-
-
-
-
-# MV total
-columns = ['MV']
-index =   ['Tot. no. of grids',
-           'No. of calc. grids',
-           'Perc. of calc. grids',
-           'Tot. calc. length in km',
-           'Av. len. per grid in km',
-           'Estim. tot. len. in km']
-mv_grid_info_df = pd.DataFrame(index=index, columns=columns)
-
-mv_grid_info_df.loc['Tot. no. of grids']['MV'] = len(all_hvmv_subst_df)
-
-mv_grid_info_df.loc['No. of calc. grids']['MV'] = len(mv_line_df.mv_grid.unique())
-
-mv_grid_info_df.loc['Perc. of calc. grids']['MV'] = round(
-        mv_grid_info_df.loc['No. of calc. grids']['MV']\
-        / mv_grid_info_df.loc['Tot. no. of grids']['MV'] * 100, 2)
-
-mv_grid_info_df.loc['Tot. calc. length in km']['MV'] = round(
-        mv_line_df['length'].sum(), 2)
-
-mv_grid_info_df.loc['Av. len. per grid in km']['MV'] = round(
-        mv_grids_df['length'].mean(), 2)
-
-mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round(
-        mv_grid_info_df.loc['Av. len. per grid in km']['MV'] *\
-        mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
-
-
-
-
-
-
-
-
-
-#%% Plot and Output Data Processing
-logger.info('Plot and Output Data Processing')
-
-### Total grid capacity and max and mean loading per voltage level in TVAkm
-s_sum_t = pd.DataFrame(0.0, ## in TVAkm
-                                   index=snap_idx,
-                                   columns=all_levels)
-
-for index, row in line_gdf.iterrows():
-    v_nom = row['v_nom']
-    s_series = pd.Series(data=row['s'], index=snap_idx)*row['length']*1e-6
-    s_sum_t[v_nom] = s_sum_t[v_nom] + s_series
-
-for index, row in mv_line_gdf.iterrows():
-    v_nom = row['v_nom']
-    s_series = pd.Series(data=row['s'], index=snap_idx)*row['length']*1e-6
-    s_sum_t[v_nom] = s_sum_t[v_nom] + s_series
-
-### Total grid overload per voltage level in TVAkm
-s_sum_over_t = pd.DataFrame(0.0,
-                                   index=snap_idx,
-                                   columns=all_levels)
-
-for index, row in line_gdf.iterrows():
-    s_over_series = pd.Series(data=row['s_over'], index=snap_idx)
-    TVAkm_over_series = s_over_series * row['s_nom_length_TVAkm']
-    v_nom = row['v_nom']
-    s_sum_over_t[v_nom] = s_sum_over_t[v_nom] + TVAkm_over_series
-
-for index, row in mv_line_gdf.iterrows():
-    s_over_series = pd.Series(data=row['s_over'], index=snap_idx)
-    TVAkm_over_series = s_over_series * row['s_nom_length_TVAkm']
-    v_nom = row['v_nom']
-    s_sum_over_t[v_nom] = s_sum_over_t[v_nom] + TVAkm_over_series
-
-### Total grid capacity and loading per voltage level
-trans_cap_df = line_gdf[['s_nom_length_TVAkm', 'v_nom']].groupby('v_nom').sum()
-mv_trans_cap_df = mv_line_gdf[['s_nom_length_TVAkm', 'v_nom']].groupby('v_nom').sum()
-total_lines_df = mv_trans_cap_df.append(trans_cap_df)
-total_lines_df = total_lines_df.rename(
-        columns={'s_nom_length_TVAkm': 'total_cap'}) ## All data is in TVAkm
-total_lines_df['max_total_loading'] = s_sum_t.max()
-total_lines_df['mean_total_loading'] = s_sum_t.mean()
-
-
-s_sum_rel_t = pd.DataFrame(0.0, ## in TVAkm
-                                   index=snap_idx,
-                                   columns=all_levels)
-for column in s_sum_rel_t:
-    s_sum_rel_t[column] = s_sum_t[column] / total_lines_df['total_cap'].loc[column]
-
-s_sum_over_rel_t = pd.DataFrame(0.0, ## in TVAkm
-                                   index=snap_idx,
-                                   columns=all_levels)
-for column in s_sum_over_rel_t:
-    s_sum_over_rel_t[column] = s_sum_over_t[column] / total_lines_df['total_cap'].loc[column]
-
-#%% Plots
-logger.info('Plottig')
-
-#### Scatter Plot
-plt_name = "MV/HV Comparison"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(10,10)
-
-mv_grids_df.plot.scatter(
-        x='Avg. feed-in MV',
-        y='Avg. feed-in HV',
-        color='blue',
-        label='MV/HV Comparison',
-        ax=ax1)
-
-ax1.plot([-250, 200],
-         [-250, 200],
-         ls="--",
-         color='red')
-
-file_name = 'feed-in_comparison'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-
-### Plot and Corr
-#### Line Plot
-plt_name = "Voltage Level Total Appearent Power"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-s_sum_t.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        linewidth=2,
-        ax = ax1)
-
-file_name = 'loading_per_level'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "110kV and 220kV Load Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_t.plot.scatter(
-        x=110.0,
-        y=220.0,
-        color='green',
-        label='110 - 220kV',
-        ax=ax1)
-
-
-regr = linear_model.LinearRegression()
-x = s_sum_t[110.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_t[220.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'loading_corr_110_220'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "220kV and 380kV Load Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_t.plot.scatter(
-        x=220.0,
-        y=380.0,
-        color='orange',
-        label='220-380kV',
-        ax=ax1)
-
-regr = linear_model.LinearRegression()
-x = s_sum_t[220.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_t[380.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'loading_corr_220_380'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Histogram
-plt_name = "Loading Hist"
-fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(6,4)
-
-s_sum_rel_t.plot.hist(alpha = 0.5, bins=20, ax=ax)
-
-file_name = 'loading_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-
-#################################
-
-
-#################################
-### Plot Overload
-#### Line Plot
-plt_name = "Voltage Level Total Overload"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-s_sum_over_t.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        linewidth=2,
-        ax = ax1)
-
-file_name = 'overl_per_level'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "220kV and 380kV Overload Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_over_t.plot.scatter(
-        x=220.0,
-        y=380.0,
-        color='orange',
-        label='220-380kV',
-        ax=ax1)
-
-regr = linear_model.LinearRegression()
-x = s_sum_over_t[220.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_over_t[380.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'overl_corr_220_380'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "110kV an 220kV Overload Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_over_t.plot.scatter(
-        x=110.0,
-        y=220.0,
-        color='green',
-        label='110-220kV',
-        ax=ax1)
-
-regr = linear_model.LinearRegression()
-x = s_sum_over_t[110.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_over_t[220.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'overl_corr_110_220'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Histogram
-plt_name = "Loading Hist"
-fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(6,4)
-
-s_sum_over_rel_t.plot.hist(alpha = 0.5, bins=20, ax=ax)
-
-file_name = 'overloading_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-##### Corr Test
-mean_squared_error(regr.predict(x), y)
-r2_score(regr.predict(x), y)
-
-s_sum_t.corr(method='pearson', min_periods=1)
-scipy.stats.pearsonr(regr.predict(x), y)[0][0]
-
-#################################
-
-#################################
-### Plot Barplot für Netzkapazitüt und Belastung
-
-plt_name = "Grid Capacity per voltage level in TVAkm"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,4)
-
-total_lines_df.plot(
-        kind='bar',
-        title=plt_name,
-        ax = ax1)
-
-file_name = 'grid_cap'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-#################################
-
-#################################
-### Plot: Ein- und Ausspeisende MV Grids.
-plt_name = "MV Grid Feed-in"
-marker_sz_mltp = 20
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,12)
-
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 380.]
-plot_df.plot(
-        color='orange',
-        linewidth=5,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 220.]
-plot_df.plot(
-        color='green',
-        linewidth=3,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 110.]
-plot_df.plot(
-        color='blue',
-        linewidth=1,
-        ax = ax1)
-plot_df = mv_line_gdf
-plot_df.plot(
-        color='grey',
-        linewidth=0.4,
-        ax = ax1)
-# HTis is acutally not correct!!!!!
-plot_df= bus_gdf.loc[(~np.isnan(bus_gdf['MV_grid_id'])) & (bus_gdf['p_mean']>=0)]
-plot_df.plot(
-        markersize= plot_df['p_mean']*marker_sz_mltp,
-        color='darkgreen',
-        ax = ax1)
-plot_df= bus_gdf.loc[(~np.isnan(bus_gdf['MV_grid_id'])) & (bus_gdf['p_mean']<0)]
-plot_df.plot(
-        markersize= -plot_df['p_mean']*marker_sz_mltp,
-        color='darkred',
-        ax = ax1)
-
-file_name = 'grid_feed_in'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-#################################
-
-#################################
-### Plot: Transformers
-plt_name = "all Transformers"
-marker_sz_mltp = 20
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,12)
-
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 380.]
-plot_df.plot(
-        color='orange',
-        linewidth=5,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 220.]
-plot_df.plot(
-        color='green',
-        linewidth=3,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 110.]
-plot_df.plot(
-        color='blue',
-        linewidth=1,
-        ax = ax1)
-plot_df = mv_line_gdf
-plot_df.plot(
-        color='grey',
-        linewidth=0.4,
-        ax = ax1)
-
-plot_df = trafo_gdf
-plot_df.plot(
-        color='red',
-        markersize=200,
-        ax=ax1)
-plot_df = mv_trafo_gdf
-plot_df.plot(
-        color='violet',
-        markersize=200,
-        ax=ax1)
-
-
-## Hier Trafos als Punkte Plotten.
-
-file_name = 'all_trafo'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-#################################

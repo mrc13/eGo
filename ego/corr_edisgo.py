@@ -160,7 +160,7 @@ for idx, row in etrago_bus_df.iterrows():
     try:
         if scn_name == 'NEP 2035':
             logger.info('Importing Generators')
-            network.import_generators(types=['wind', 'solar'])
+            network.import_generators(types=['wind', 'solar']) ## Check which generators can be imported (CHP, biomass (gas))
 
         network.analyze()
 

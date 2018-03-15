@@ -102,40 +102,6 @@ for b, s, c in zip(b_factor, snapshots, comments):
             logger.error('Could not save Results to DB',  exc_info=True)
 
 
-    ans = str(input("Want to copy results to corr (y/n)? "))
-    if ans == 'y':
-        result_id = str(input("Please type the result_id: "))
-        try:
-            logger.info('Results to DB')
-            session.execute('''
-                DELETE FROM model_draft.corr_hv_lines_results
-                    WHERE result_id = :result_id;
-                INSERT INTO model_draft.corr_hv_lines_results
-                SELECT * FROM model_draft.ego_grid_pf_hv_result_line
-                	WHERE result_id = :result_id;
-
-                DELETE FROM model_draft.corr_hv_lines_t_results
-                    WHERE result_id = :result_id;
-                INSERT INTO model_draft.corr_hv_lines_t_results
-                SELECT * FROM model_draft.ego_grid_pf_hv_result_line_t
-                	WHERE result_id = :result_id;
-
-                DELETE FROM model_draft.corr_hv_bus_results
-                    WHERE result_id = :result_id;
-                INSERT INTO model_draft.corr_hv_bus_results
-                SELECT * FROM model_draft.ego_grid_pf_hv_result_bus
-                	WHERE result_id = :result_id;
-
-                DELETE FROM model_draft.corr_hv_bus_t_results
-                    WHERE result_id = :result_id;
-                INSERT INTO model_draft.corr_hv_bus_t_results
-                SELECT * FROM model_draft.ego_grid_pf_hv_result_bus_t
-                	WHERE result_id = :result_id;
-            ''', {'result_id': result_id})
-            session.commit()
-        except:
-            logger.error('Could not copy results to corr',  exc_info=True)
-
     ans = str(input("Want to update s_nom in results (y/n)? "))
     if ans == 'y':
         result_id = str(input("Please type the result_id: "))
