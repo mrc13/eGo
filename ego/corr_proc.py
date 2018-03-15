@@ -253,13 +253,6 @@ gens_df = pd.DataFrame(query.all(),
                                column in
                                query.column_descriptions])
 gens_df = gens_df.set_index('generator_id')
-gens_df['p_mean'] = np.nan
-for index, row in gens_df.iterrows():
-    try:
-        gens_df.loc[index]['p_mean'] = pd.Series(data=row['p']).mean()
-    except:
-        gens_df.loc[index]['p_mean'] = np.nan
-#gens_df = gens_df.drop(['p'], axis=1)
 
 gens_df.to_csv(result_dir + 'gens_df.csv', encoding='utf-8')
 
