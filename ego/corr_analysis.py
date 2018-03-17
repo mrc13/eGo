@@ -89,7 +89,7 @@ line_df = gpd.GeoDataFrame(line_df,
                            geometry=line_df.topo.map(shapely.wkt.loads))
 line_df = line_df.drop(['geom', 'topo', 's'], axis=1) # s is redundant due to s_rel
 
-line_df['s_nom_length_MVAkm'] = line_df['s_nom_length_TVAkm']*1e3
+line_df['s_nom_length_GVAkm'] = line_df['s_nom_length_TVAkm']*1e3
 line_df['s_rel'] = line_df.apply(
         lambda x: eval(x['s_rel']), axis=1)
 
@@ -99,7 +99,7 @@ line_df['s_over'] = line_df.apply(
 line_df['s_over_bol'] = line_df.apply(
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 line_df['s_over_abs'] = line_df.apply(
-        lambda x: [n * x['s_nom_length_MVAkm'] \
+        lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n else 0 for n in x['s_over_bol']], axis=1)
 
 # MV Lines
@@ -108,7 +108,7 @@ mv_line_df = gpd.GeoDataFrame(mv_line_df,
                               crs=crs,
                               geometry=mv_line_df.geom.map(shapely.wkt.loads))
 mv_line_df = mv_line_df.drop(['geom', 's'], axis=1)
-mv_line_df['s_nom_length_MVAkm'] = mv_line_df['s_nom_length_TVAkm']*1e3
+mv_line_df['s_nom_length_GVAkm'] = mv_line_df['s_nom_length_TVAkm']*1e3
 mv_line_df['s_rel'] = mv_line_df.apply(
         lambda x: eval(x['s_rel']), axis=1)
 
@@ -118,7 +118,7 @@ mv_line_df['s_over'] = mv_line_df.apply(
 mv_line_df['s_over_bol'] = mv_line_df.apply(
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 mv_line_df['s_over_abs'] = mv_line_df.apply(
-        lambda x: [n * x['s_nom_length_MVAkm'] \
+        lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n else 0 for n in x['s_over_bol']], axis=1)
 
 # Buses
@@ -216,7 +216,7 @@ columns = []
 mv_grids_df = pd.DataFrame(index=index, columns=columns)
 
 mv_grids_df['length in km'] = mv_line_df.groupby(['mv_grid'])['length'].sum()
-mv_grids_df['Transm. cap. in MVAkm'] = \
+mv_grids_df['Transm. cap. in GVAkm'] = \
     mv_line_df.groupby(['mv_grid'])['s_nom_length_TVAkm'].sum() *1e3
 
 mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
@@ -250,8 +250,9 @@ index =   ['Tot. no. of grids',
            'Tot. calc. length in km',
            'Avg. len. per grid in km',
            'Estim. tot. len. in km',
-           'Avg. transm. cap. in MVAkm',
-           'Estim. tot. trans cap. in MVAkm']
+           'Tot. calc. cap in GVAkm',
+           'Avg. transm. cap. in GVAkm',
+           'Estim. tot. trans cap. in GVAkm']
 mv_grid_info_df = pd.DataFrame(index=index, columns=columns)
 
 mv_grid_info_df.loc['Tot. no. of grids']['MV'] = len(all_hvmv_subst_df)
@@ -272,37 +273,50 @@ mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round( # Länge evtl. bess
         mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] *\
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
 
-mv_grid_info_df.loc['Avg. transm. cap. in MVAkm']['MV'] = round(
-        mv_grids_df['Transm. cap. in MVAkm'].mean(), 2)
+mv_grid_info_df.loc['Tot. calc. cap in GVAkm']['MV'] = round(
+        mv_grids_df['Transm. cap. in GVAkm'].sum(), 2)
 
-mv_grid_info_df.loc['Estim. tot. trans cap. in MVAkm']['MV'] = round(
-        mv_grid_info_df.loc['Avg. transm. cap. in MVAkm']['MV'] *\
+mv_grid_info_df.loc['Avg. transm. cap. in GVAkm']['MV'] = round(
+        mv_grids_df['Transm. cap. in GVAkm'].mean(), 2)
+
+mv_grid_info_df.loc['Estim. tot. trans cap. in GVAkm']['MV'] = round(
+        mv_grid_info_df.loc['Avg. transm. cap. in GVAkm']['MV'] *\
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
 
 mv_grid_info_df.to_csv(analysis_dir + 'mv_grid_info_df.csv', encoding='utf-8')
 
+mv_rel_calc = mv_grid_info_df.loc['No. of calc. grids']['MV'] / \
+        mv_grid_info_df.loc['Tot. no. of grids']['MV']
+
 # HV Total
 columns = ['HV', 'EHV220', 'EHV380']
 index =   ['Total. len. in km',
-           'Something']
+           'Total. cap. in TVAkm']
 grid_info_df = pd.DataFrame(index=index, columns=columns)
 
 for col in columns:
     grid_info_df.loc['Total. len. in km'][col] = round(
             line_df.loc[line_df['v_nom'] == get_volt_from_lev(col)]['length'].sum(), 2)
 
+for col in columns:
+    grid_info_df.loc['Total. cap. in TVAkm'][col] = round(
+            line_df.loc[line_df['v_nom'] == get_volt_from_lev(col)]['s_nom_length_TVAkm'].sum(), 2)
+
 grid_info_df.to_csv(analysis_dir + 'grid_info_df.csv', encoding='utf-8')
 
 # HV/MV Comparison
 columns = ['MV', 'HV', 'EHV220', 'EHV380']
 index =   ['Total. len. in km',
-           'Something']
+           'Total. cap. in TVAkm']
 hvmv_comparison_df = pd.DataFrame(index=index, columns=columns)
 
 hvmv_comparison_df.loc['Total. len. in km']['MV'] = mv_grid_info_df.loc['Estim. tot. len. in km']['MV']
-
 for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. len. in km'][col] = grid_info_df.loc['Total. len. in km'][col]
+
+hvmv_comparison_df.loc['Total. cap. in TVAkm']['MV'] = mv_grid_info_df.loc['Estim. tot. trans cap. in GVAkm']['MV']/1e3
+for col in grid_info_df.columns:
+    hvmv_comparison_df.loc['Total. cap. in TVAkm'][col] = grid_info_df.loc['Total. cap. in TVAkm'][col]
 
 del columns
 del index
@@ -311,27 +325,56 @@ hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf
 
 #%% Corr Germany
 
-# Total grid overload per voltage level in TVAkm
+# Total grid overload per voltage level in GVAkm and km  and relative
 s_sum_len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
 
-for index, row in line_df.iterrows():
-    s_over_series = pd.Series(data=row['s_over_abs'], index=snap_idx)
-    lev = get_lev_from_volt(row['v_nom'])
-    s_sum_len_over_t[lev] = s_sum_len_over_t[lev] + s_over_series
+len_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=all_levels)
 
-for index, row in mv_line_df.iterrows():
-    s_over_series = pd.Series(data=row['s_over_abs'], index=snap_idx)
-    lev = get_lev_from_volt(row['v_nom'])
-    s_sum_len_over_t[lev] = s_sum_len_over_t[lev] + s_over_series
+for df in [line_df, mv_line_df]:
+
+    for index, row in df.iterrows():
+        lev = get_lev_from_volt(row['v_nom'])
+
+        #cap
+        s_over_series = pd.Series(data=row['s_over_abs'], index=snap_idx)
+
+        s_sum_len_over_t[lev] = s_sum_len_over_t[lev] + s_over_series
+
+        #length
+        s_over_series = pd.Series(data=row['s_over_bol'], index=snap_idx)
+        len_over_series = s_over_series * row['length']
+
+        len_over_t[lev] = len_over_t[lev] + len_over_series
+
+s_sum_len_over_t['MV'] = s_sum_len_over_t['MV'] / mv_rel_calc
+len_over_t['MV'] = len_over_t['MV'] / mv_rel_calc # For MV, the calculated values must be estimated for the entire grid
+
+
+s_sum_len_over_t_norm = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=all_levels)
+len_over_t_norm = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=all_levels)
+
+for col in s_sum_len_over_t_norm.columns:
+    s_sum_len_over_t_norm[col] = s_sum_len_over_t[col] / (hvmv_comparison_df.loc['Total. cap. in TVAkm'][col] * 1e3) * 100
+for col in len_over_t_norm.columns:
+    len_over_t_norm[col] = len_over_t[col] / hvmv_comparison_df.loc['Total. len. in km'][col] * 100
+
 
 ## Corr
-
 corr_s_sum_len_over_t = s_sum_len_over_t.corr(method='pearson')
+corr_s_sum_len_over_t.to_csv(result_dir + 'corr_s_sum_len_over_t.csv', encoding='utf-8')
 
+corr_len_over_t = len_over_t.corr(method='pearson')
+corr_len_over_t.to_csv(result_dir + 'corr_len_over_t.csv', encoding='utf-8')
 
-## Plot
+## Plot Cap
 plt_name = "Total Line Overloading Germany"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(12,4)
@@ -343,36 +386,27 @@ frm = s_sum_len_over_t.plot(
         color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
         linewidth=2,
         ax = ax1)
-plt.ylabel('Total overloading in MVAkm')
-file_name = 'overl_per_level'
+plt.ylabel('Total overloading in GVAkm')
+file_name = 'overl_per_level_in_GVAkm'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
 
-# Total grid overload per voltage level in km
-len_over_t = pd.DataFrame(0.0,
-                                   index=snap_idx,
-                                   columns=all_levels)
+plt_name = "Relative total Line Overloading Germany"
+fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,4)
 
-for index, row in line_df.iterrows():
-    s_over_series = pd.Series(data=row['s_over_bol'], index=snap_idx)
-    len_over_series = s_over_series * row['length']
-    lev = get_lev_from_volt(row['v_nom'])
-    len_over_t[lev] = len_over_t[lev] + len_over_series
+frm = s_sum_len_over_t_norm.plot(
+        kind='line',
+        title=plt_name,
+        legend=True,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=2,
+        ax = ax1)
+plt.ylabel('Relative total overloading in percent')
+file_name = 'rel_overl_per_level_in_perc'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
 
-for index, row in mv_line_df.iterrows():
-    s_over_series = pd.Series(data=row['s_over_bol'], index=snap_idx)
-    len_over_series = s_over_series * row['length']
-    lev = get_lev_from_volt(row['v_nom'])
-    len_over_t[lev] = len_over_t[lev] + len_over_series
-
-del s_over_series
-del len_over_series
-
-## Corr
-
-corr_len_over_t = len_over_t.corr(method='pearson')
-
-## Plot
 plt_name = "Length of overloaded Lines Germany"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(12,4)
@@ -385,9 +419,62 @@ frm = len_over_t.plot(
         linewidth=2,
         ax = ax1)
 plt.ylabel('length of overloaded lines in km')
-file_name = 'overl_per_level'
+file_name = 'overl_per_level_in_km'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+
+plt_name = "Length of overloaded Lines Germany (normalized)"
+fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,4)
+
+frm = len_over_t_norm.plot(
+        kind='line',
+        title=plt_name,
+        legend=True,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=2,
+        ax = ax1)
+plt.ylabel('Total overloading in % of grid length')
+file_name = 'overl_per_level_in_perc'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
+
+
+# All s_rel over Comparison per level
+s_rel_over_per_lev = { key : [] for key in all_levels }
+for df in [line_df, mv_line_df]:
+    for index, row in df.iterrows():
+        lev = get_lev_from_volt(row['v_nom'])
+        s_rel_series = row['s_over']
+        for s_rel in s_rel_series:
+            if s_rel > 0:
+                s_rel_over_per_lev[lev].append(s_rel)
+
+
+## Plot
+plt_name = "Relative overload Hist"
+fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(8,4)
+
+vals = []
+colors = []
+levs = []
+for key, value in s_rel_over_per_lev.items():
+   levs.append(key)
+   vals.append(value)
+   colors.append(level_colors[key])
+
+bins = [0, .1, .2, .3, .4, .5, .6, .7, 0.8, 0.9, 1]
+ax = plt.hist(x=vals, color=colors, bins=bins, normed=True)
+plt.xlabel("Relative overload")
+plt.legend(levs)
+
+
+file_name = 'rel_overload_hist'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
+
+##########################
 
 
 # Hier noch Zeitreihen für Load

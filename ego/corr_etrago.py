@@ -107,7 +107,7 @@ for b, s, c in zip(b_factor, snapshots, comments):
         result_id = str(input("Please type the result_id: "))
         scn_name = get_scn_name_from_result_id(session, result_id)
         session.execute('''
-        UPDATE model_draft.corr_hv_lines_results as lr
+        UPDATE model_draft.ego_grid_pf_hv_result_line as lr
             SET s_nom = (SELECT s_nom
                              FROM model_draft.ego_grid_pf_hv_line as l
                              WHERE   scn_name = :scn_name AND
@@ -115,6 +115,7 @@ for b, s, c in zip(b_factor, snapshots, comments):
             WHERE result_id = :result_id;
         ''', {'result_id': result_id, 'scn_name': scn_name})
         session.commit()
+
 
 
 
