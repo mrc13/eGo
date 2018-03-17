@@ -16,6 +16,8 @@ from time import localtime, strftime
 from matplotlib import pyplot as plt
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
+from dateutil import parser
+from datetime import datetime
 
 ## Logging
 import logging
@@ -31,14 +33,22 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 # General Inputs
+cont_fct_hv = 0.7
+cont_fct_mv = 0.5
 result_id = 384
 data_set = '2018-03-15'
 result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + data_set + '/'
 
+# Directories
 now = strftime("%Y-%m-%d %H:%M", localtime())
+
 analysis_dir = 'corr_results/' + str(result_id) + '/analysis/' + now + '/'
 if not os.path.exists(analysis_dir):
     os.makedirs(analysis_dir)
+
+plot_dir = analysis_dir + 'plots/'
+if not os.path.exists(plot_dir):
+    os.makedirs(plot_dir)
 
 #%% Data import
 try:
@@ -67,23 +77,51 @@ except:
 try:
     all_hvmv_subst_df = pd.DataFrame.from_csv(result_dir + 'all_hvmv_subst_df.csv', encoding='utf-8')
     snap_idx = pd.Series.from_csv(result_dir + 'snap_idx', encoding='utf-8')
+    snap_idx = pd.Series([parser.parse(idx) for idx in snap_idx])
 except:
     logger.warning('No Subst. imported')
 
 #%% Further Processing
-
+# HV Lines
 crs = {'init': 'epsg:4326'}
 line_df = gpd.GeoDataFrame(line_df,
                            crs=crs,
                            geometry=line_df.topo.map(shapely.wkt.loads))
-line_df = line_df.drop(['geom', 'topo'], axis=1)
+line_df = line_df.drop(['geom', 'topo', 's'], axis=1) # s is redundant due to s_rel
 
+line_df['s_nom_length_MVAkm'] = line_df['s_nom_length_TVAkm']*1e3
+line_df['s_rel'] = line_df.apply(
+        lambda x: eval(x['s_rel']), axis=1)
+
+## Overload
+line_df['s_over'] = line_df.apply(
+        lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
+line_df['s_over_bol'] = line_df.apply(
+        lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
+line_df['s_over_abs'] = line_df.apply(
+        lambda x: [n * x['s_nom_length_MVAkm'] \
+                   if n else 0 for n in x['s_over_bol']], axis=1)
+
+# MV Lines
 crs = {'init': 'epsg:4326'}
 mv_line_df = gpd.GeoDataFrame(mv_line_df,
                               crs=crs,
                               geometry=mv_line_df.geom.map(shapely.wkt.loads))
-mv_line_df = mv_line_df.drop(['geom'], axis=1)
+mv_line_df = mv_line_df.drop(['geom', 's'], axis=1)
+mv_line_df['s_nom_length_MVAkm'] = mv_line_df['s_nom_length_TVAkm']*1e3
+mv_line_df['s_rel'] = mv_line_df.apply(
+        lambda x: eval(x['s_rel']), axis=1)
 
+# Overload
+mv_line_df['s_over'] = mv_line_df.apply(
+        lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
+mv_line_df['s_over_bol'] = mv_line_df.apply(
+        lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
+mv_line_df['s_over_abs'] = mv_line_df.apply(
+        lambda x: [n * x['s_nom_length_MVAkm'] \
+                   if n else 0 for n in x['s_over_bol']], axis=1)
+
+# Buses
 crs = {'init': 'epsg:4326'}
 bus_df = gpd.GeoDataFrame(bus_df,
                           crs=crs,
@@ -127,9 +165,9 @@ del mv_griddistricts_df
 
 #%% Basic functions and Dicts
 
-hv_levels = pd.unique(line_df['v_nom']).tolist()
-mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
-all_levels = mv_levels + hv_levels
+#hv_levels = pd.unique(line_df['v_nom']).tolist()
+#mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
+#all_levels = mv_levels + hv_levels
 
 level_colors = {'LV': 'grey',
                 'MV': 'black',
@@ -137,6 +175,8 @@ level_colors = {'LV': 'grey',
                 'EHV220': 'green',
                 'EHV380': 'orange',
                 'unknown': 'grey'}
+
+all_levels = {'MV', 'HV', 'EHV220', 'EHV380'}
 
 def get_lev_from_volt (v_voltage): # in kV
     try:
@@ -154,6 +194,7 @@ def get_lev_from_volt (v_voltage): # in kV
     elif v == 380:
         return 'EHV380'
     else: return 'unknown'
+
 def get_volt_from_lev (v_lev):
     if v_lev == 'HV':
         return 110.
@@ -162,6 +203,9 @@ def get_volt_from_lev (v_lev):
     elif v_lev == 'EHV380':
         return 380.
     else: return None
+
+def get_hour_of_year (v_d):
+    return ((v_d.timetuple().tm_yday-1) * 24 + v_d.hour + 1)
 
 #%% Basic grid information
 logger.info('Basic grid information')
@@ -194,7 +238,7 @@ mv_gens_df = mv_gens_df.dropna() # I think this is also load shedding
 ## Find out how much load shedding is done...
 
 mv_grids_df['Inst. gen. capacity'] = mv_gens_df.groupby(['subst_id'])['p_nom'].sum()
-
+del mv_gens_df
 
 mv_grids_df.to_csv(analysis_dir + 'mv_grids_df.csv', encoding='utf-8')
 
@@ -224,7 +268,7 @@ mv_grid_info_df.loc['Tot. calc. length in km']['MV'] = round(
 mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] = round(
         mv_grids_df['length in km'].mean(), 2)
 
-mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round(
+mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round( # Länge evtl. besser direkt aus Ding0 berechnen
         mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] *\
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
 
@@ -260,8 +304,100 @@ hvmv_comparison_df.loc['Total. len. in km']['MV'] = mv_grid_info_df.loc['Estim. 
 for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. len. in km'][col] = grid_info_df.loc['Total. len. in km'][col]
 
+del columns
+del index
 
 hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf-8')
+
+#%% Corr Germany
+
+# Total grid overload per voltage level in TVAkm
+s_sum_len_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=all_levels)
+
+for index, row in line_df.iterrows():
+    s_over_series = pd.Series(data=row['s_over_abs'], index=snap_idx)
+    lev = get_lev_from_volt(row['v_nom'])
+    s_sum_len_over_t[lev] = s_sum_len_over_t[lev] + s_over_series
+
+for index, row in mv_line_df.iterrows():
+    s_over_series = pd.Series(data=row['s_over_abs'], index=snap_idx)
+    lev = get_lev_from_volt(row['v_nom'])
+    s_sum_len_over_t[lev] = s_sum_len_over_t[lev] + s_over_series
+
+## Corr
+
+corr_s_sum_len_over_t = s_sum_len_over_t.corr(method='pearson')
+
+
+## Plot
+plt_name = "Total Line Overloading Germany"
+fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,4)
+
+frm = s_sum_len_over_t.plot(
+        kind='line',
+        title=plt_name,
+        legend=True,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=2,
+        ax = ax1)
+plt.ylabel('Total overloading in MVAkm')
+file_name = 'overl_per_level'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
+
+# Total grid overload per voltage level in km
+len_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=all_levels)
+
+for index, row in line_df.iterrows():
+    s_over_series = pd.Series(data=row['s_over_bol'], index=snap_idx)
+    len_over_series = s_over_series * row['length']
+    lev = get_lev_from_volt(row['v_nom'])
+    len_over_t[lev] = len_over_t[lev] + len_over_series
+
+for index, row in mv_line_df.iterrows():
+    s_over_series = pd.Series(data=row['s_over_bol'], index=snap_idx)
+    len_over_series = s_over_series * row['length']
+    lev = get_lev_from_volt(row['v_nom'])
+    len_over_t[lev] = len_over_t[lev] + len_over_series
+
+del s_over_series
+del len_over_series
+
+## Corr
+
+corr_len_over_t = len_over_t.corr(method='pearson')
+
+## Plot
+plt_name = "Length of overloaded Lines Germany"
+fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,4)
+
+frm = len_over_t.plot(
+        kind='line',
+        title=plt_name,
+        legend=True,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=2,
+        ax = ax1)
+plt.ylabel('length of overloaded lines in km')
+file_name = 'overl_per_level'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
+
+
+# Hier noch Zeitreihen für Load
+# Hier noch Zeitreihen für Generatoren (auch Deutschlandweit)
+
+# Gucken welche Leitungen am häufigsten überlastet werden.
+# Überlastung auch in Leitungslänge messen und dann Korrelationen suchen
+# Da auf Deutschlandebene quasi keine Korrelation, die Korrelation mit der Windeinspeisung suchen und gucken ob höher, als z.b. mit Kohle
+
+
 
 
 #%% Plot and Output Data Processing
@@ -282,22 +418,7 @@ for index, row in mv_line_gdf.iterrows():
     s_series = pd.Series(data=row['s'], index=snap_idx)*row['length']*1e-6
     s_sum_t[v_nom] = s_sum_t[v_nom] + s_series
 
-### Total grid overload per voltage level in TVAkm
-s_sum_over_t = pd.DataFrame(0.0,
-                                   index=snap_idx,
-                                   columns=all_levels)
 
-for index, row in line_gdf.iterrows():
-    s_over_series = pd.Series(data=row['s_over'], index=snap_idx)
-    TVAkm_over_series = s_over_series * row['s_nom_length_TVAkm']
-    v_nom = row['v_nom']
-    s_sum_over_t[v_nom] = s_sum_over_t[v_nom] + TVAkm_over_series
-
-for index, row in mv_line_gdf.iterrows():
-    s_over_series = pd.Series(data=row['s_over'], index=snap_idx)
-    TVAkm_over_series = s_over_series * row['s_nom_length_TVAkm']
-    v_nom = row['v_nom']
-    s_sum_over_t[v_nom] = s_sum_over_t[v_nom] + TVAkm_over_series
 
 ### Total grid capacity and loading per voltage level
 trans_cap_df = line_gdf[['s_nom_length_TVAkm', 'v_nom']].groupby('v_nom').sum()
@@ -426,20 +547,7 @@ fig.savefig(plot_dir + file_name + '.png')
 #################################
 ### Plot Overload
 #### Line Plot
-plt_name = "Voltage Level Total Overload"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
 
-s_sum_over_t.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        linewidth=2,
-        ax = ax1)
-
-file_name = 'overl_per_level'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
 
 #### Scatter Plot
 plt_name = "220kV and 380kV Overload Correlation"

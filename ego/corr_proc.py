@@ -45,6 +45,8 @@ ormclass_result_line = model_draft.EgoGridPfHvResultLine
 ormclass_result_bus = model_draft.EgoGridPfHvResultBus
 ormclass_result_line_t = model_draft.EgoGridPfHvResultLineT
 ormclass_result_bus_t = model_draft.EgoGridPfHvResultBusT
+ormclass_result_load = model_draft.EgoGridPfHvResultLoad
+ormclass_result_load_t = model_draft.EgoGridPfHvResultLoadT
 ormclass_source = model_draft.EgoGridPfHvSource
 ## corr
 mv_lines = corr_io.corr_mv_lines_results
@@ -174,6 +176,27 @@ mv_line_df['s_rel'] = mv_line_df.apply(
 
 line_df.to_csv(result_dir + 'line_df.csv', encoding='utf-8')
 mv_line_df.to_csv(result_dir + 'mv_line_df.csv', encoding='utf-8')
+
+#%% Load
+logger.info('Load')
+query = session.query(
+        ormclass_result_load.load_id,
+        ormclass_result_load.bus,
+        ormclass_result_load.e_annual,
+        ormclass_result_load_t.p
+        ).join(
+                ormclass_result_load_t,
+                ormclass_result_load_t.load_id == ormclass_result_load.load_id
+                ).filter(
+                ormclass_result_load.result_id == result_id,
+                ormclass_result_load_t.result_id == result_id)
+
+load_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+load_df = load_df.set_index('load_id')
+load_df.to_csv(result_dir + 'load_df.csv', encoding='utf-8')
 
 #%% Buses
 logger.info('Buses')
