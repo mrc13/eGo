@@ -17,7 +17,6 @@ from matplotlib import pyplot as plt
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 from dateutil import parser
-from datetime import datetime
 
 ## Logging
 import logging
@@ -33,10 +32,10 @@ fh.setFormatter(formatter)
 logger.addHandler(fh)
 
 # General Inputs
-cont_fct_hv = 0.7
-cont_fct_mv = 0.5
+cont_fct_hv = 0.85
+cont_fct_mv = 1 # This is ok, simce load will not overload
 result_id = 384
-data_set = '2018-03-15'
+data_set = '2018-03-17'
 result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + data_set + '/'
 
 # Directories
@@ -49,6 +48,64 @@ if not os.path.exists(analysis_dir):
 plot_dir = analysis_dir + 'plots/'
 if not os.path.exists(plot_dir):
     os.makedirs(plot_dir)
+
+tex_file = open(analysis_dir + 'tex_file.txt','w')
+def add_figure_to_tex ():
+    tex_file.write('''
+
+
+
+
+
+
+    ''')
+    '%s %s' % ('one', 'two')
+
+#%% Basic functions and Dicts
+
+#hv_levels = pd.unique(line_df['v_nom']).tolist()
+#mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
+#all_levels = mv_levels + hv_levels
+
+level_colors = {'LV': 'grey',
+                'MV': 'black',
+                'HV': 'blue',
+                'EHV220': 'green',
+                'EHV380': 'orange',
+                'unknown': 'grey'}
+
+all_levels = ['MV', 'HV', 'EHV220', 'EHV380']
+
+def get_lev_from_volt (v_voltage): # in kV
+    try:
+        v = float(v_voltage)
+    except:
+        return None
+    if v <= 1:
+        return 'LV'
+    elif (v >= 3) & (v <= 30):
+        return 'MV'
+    elif (v >= 60) & (v <= 110):
+        return 'HV'
+    elif v == 220:
+        return 'EHV220'
+    elif v == 380:
+        return 'EHV380'
+    else: return 'unknown'
+
+def get_volt_from_lev (v_lev):
+    if v_lev == 'MV':
+        return 20. # This is not always true
+    elif v_lev == 'HV':
+        return 110.
+    elif v_lev == 'EHV220':
+        return 220.
+    elif v_lev == 'EHV380':
+        return 380.
+    else: return None
+
+def get_hour_of_year (v_d):
+    return ((v_d.timetuple().tm_yday-1) * 24 + v_d.hour + 1)
 
 #%% Data import
 try:
@@ -89,9 +146,15 @@ line_df = gpd.GeoDataFrame(line_df,
                            geometry=line_df.topo.map(shapely.wkt.loads))
 line_df = line_df.drop(['geom', 'topo', 's'], axis=1) # s is redundant due to s_rel
 
+#no_line = len(line_df)
+#line_df = line_df.drop(line_df.loc[line_df['length'] < 1].index)
+#short_lines = no_line - len(line_df)
+
 line_df['s_nom_length_GVAkm'] = line_df['s_nom_length_TVAkm']*1e3
 line_df['s_rel'] = line_df.apply(
         lambda x: eval(x['s_rel']), axis=1)
+line_df['lev'] = line_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom']), axis=1)
 
 ## Overload
 line_df['s_over'] = line_df.apply(
@@ -102,16 +165,23 @@ line_df['s_over_abs'] = line_df.apply(
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n else 0 for n in x['s_over_bol']], axis=1)
 
+
 # MV Lines
 crs = {'init': 'epsg:4326'}
 mv_line_df = gpd.GeoDataFrame(mv_line_df,
                               crs=crs,
                               geometry=mv_line_df.geom.map(shapely.wkt.loads))
 mv_line_df = mv_line_df.drop(['geom', 's'], axis=1)
+
+#no_line = len(mv_line_df)
+#mv_line_df = mv_line_df.drop(mv_line_df.loc[mv_line_df['length'] < 0.1].index)
+#short_mv_lines = no_line - len(mv_line_df)
+
 mv_line_df['s_nom_length_GVAkm'] = mv_line_df['s_nom_length_TVAkm']*1e3
 mv_line_df['s_rel'] = mv_line_df.apply(
         lambda x: eval(x['s_rel']), axis=1)
-
+mv_line_df['lev'] = mv_line_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom']), axis=1)
 # Overload
 mv_line_df['s_over'] = mv_line_df.apply(
         lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
@@ -163,49 +233,7 @@ del mv_griddistricts_df
 
 # ToDo: Clean out faulty MV grids, that e.g. have remote generators...
 
-#%% Basic functions and Dicts
 
-#hv_levels = pd.unique(line_df['v_nom']).tolist()
-#mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
-#all_levels = mv_levels + hv_levels
-
-level_colors = {'LV': 'grey',
-                'MV': 'black',
-                'HV': 'blue',
-                'EHV220': 'green',
-                'EHV380': 'orange',
-                'unknown': 'grey'}
-
-all_levels = {'MV', 'HV', 'EHV220', 'EHV380'}
-
-def get_lev_from_volt (v_voltage): # in kV
-    try:
-        v = float(v_voltage)
-    except:
-        return None
-    if v <= 1:
-        return 'LV'
-    elif (v >= 3) & (v <= 30):
-        return 'MV'
-    elif (v >= 60) & (v <= 110):
-        return 'HV'
-    elif v == 220:
-        return 'EHV220'
-    elif v == 380:
-        return 'EHV380'
-    else: return 'unknown'
-
-def get_volt_from_lev (v_lev):
-    if v_lev == 'HV':
-        return 110.
-    elif v_lev == 'EHV220':
-        return 220.
-    elif v_lev == 'EHV380':
-        return 380.
-    else: return None
-
-def get_hour_of_year (v_d):
-    return ((v_d.timetuple().tm_yday-1) * 24 + v_d.hour + 1)
 
 #%% Basic grid information
 logger.info('Basic grid information')
@@ -227,18 +255,20 @@ mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
 
 # ToDo: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
 # ToDo: Hierfür besser direkt über eDisGo Generatoren arbeiten.
+try:
+    mv_gens_df = gens_df.merge(all_hvmv_subst_df,
+                  how='inner',
+                  left_on='bus',
+                  right_on='bus_id')
 
-mv_gens_df = gens_df.merge(all_hvmv_subst_df,
-              how='inner',
-              left_on='bus',
-              right_on='bus_id')
+    mv_gens_df = mv_gens_df[mv_gens_df['name'] != 'load shedding']
+    mv_gens_df = mv_gens_df.dropna() # I think this is also load shedding
+    ## Find out how much load shedding is done...
 
-mv_gens_df = mv_gens_df[mv_gens_df['name'] != 'load shedding']
-mv_gens_df = mv_gens_df.dropna() # I think this is also load shedding
-## Find out how much load shedding is done...
-
-mv_grids_df['Inst. gen. capacity'] = mv_gens_df.groupby(['subst_id'])['p_nom'].sum()
-del mv_gens_df
+    mv_grids_df['Inst. gen. capacity'] = mv_gens_df.groupby(['subst_id'])['p_nom'].sum()
+    del mv_gens_df
+except:
+    logger.warning('Inst. gen. capacity could not be imported')
 
 mv_grids_df.to_csv(analysis_dir + 'mv_grids_df.csv', encoding='utf-8')
 
@@ -323,7 +353,38 @@ del index
 
 hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf-8')
 
-#%% Corr Germany
+#%% Electrical Overview
+
+fig, ax = plt.subplots(1, 4) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,5)
+vals = []
+colors = []
+levs = []
+for idx, lev in enumerate(all_levels):
+
+    levs.append(lev)
+    if lev == 'MV':
+        df = mv_line_df
+    else:
+        df = line_df
+    vals.append(df.loc[df['lev'] == lev]['s_nom'])
+    colors.append(level_colors[lev])
+
+    #bins = range(0, 2000, 200)
+    pd.Series(vals[idx]).hist(
+                  color=colors[idx],
+                  ax=ax[idx],
+                  bins=10, alpha = 0.7)
+
+    plt.xlabel("S_nom")
+    ax[idx].legend((lev,))
+
+file_name = 's_nom_hist'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
+
+
+#%% Corr Germany Calcs
 
 # Total grid overload per voltage level in GVAkm and km  and relative
 s_sum_len_over_t = pd.DataFrame(0.0,
@@ -367,14 +428,17 @@ for col in len_over_t_norm.columns:
     len_over_t_norm[col] = len_over_t[col] / hvmv_comparison_df.loc['Total. len. in km'][col] * 100
 
 
-## Corr
+#%% Corr Germany Plots
+# Corr
 corr_s_sum_len_over_t = s_sum_len_over_t.corr(method='pearson')
 corr_s_sum_len_over_t.to_csv(result_dir + 'corr_s_sum_len_over_t.csv', encoding='utf-8')
 
 corr_len_over_t = len_over_t.corr(method='pearson')
 corr_len_over_t.to_csv(result_dir + 'corr_len_over_t.csv', encoding='utf-8')
 
-## Plot Cap
+## Plot
+##% Line Plots
+##%% Capacity
 plt_name = "Total Line Overloading Germany"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(12,4)
@@ -407,6 +471,7 @@ file_name = 'rel_overl_per_level_in_perc'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
 
+##%% Length
 plt_name = "Length of overloaded Lines Germany"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(12,4)
@@ -439,6 +504,64 @@ file_name = 'overl_per_level_in_perc'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
 
+##% Scatter Plots
+for x_lev in len_over_t.columns:
+    fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+    fig.set_size_inches(12,6)
+    ax1.set_xlim(0, max(len_over_t[x_lev]))
+    y_max = 0
+    for y_lev in len_over_t.columns:
+        y_max_lev = max(len_over_t[y_lev])
+        if y_max_lev > y_max:
+            y_max = y_max_lev
+        ax1.set_ylim(0, y_max)
+        x_volt = get_volt_from_lev(x_lev)
+        y_volt = get_volt_from_lev(y_lev)
+        if x_volt == y_volt:
+            continue
+        plt_name = x_lev +' and ' + y_lev +' Loading Correlation'
+
+## Dass 380 am meisten ansteigt bei HV und MV lässt sich erklären, da die RE, die das Netz überlasten aus dem VN kommen (angeschlossen sind)
+        len_over_t.plot.scatter(
+                x=x_lev,
+                y=y_lev,
+                color=level_colors[y_lev],
+                label=y_lev,
+                alpha=0.5,
+                ax=ax1)
+
+        regr = linear_model.LinearRegression()
+        x = len_over_t[x_lev].values.reshape(len(len_over_t), 1)
+        y = len_over_t[y_lev].values.reshape(len(len_over_t), 1)
+        regr.fit(x, y)
+        plt.plot(x, regr.predict(x), color=level_colors[y_lev], linewidth=1)
+        plt.ylabel('Overloaded lines in km')
+        plt.xlabel(x_lev + ', Overloaded lines in km')
+
+    file_name = 'loading_corr_' + x_lev
+    fig.savefig(plot_dir + file_name + '.pdf')
+    fig.savefig(plot_dir + file_name + '.png')
+
+##% Histograms
+plt_name = "Overloaded Length Histogram"
+fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(8,4)
+
+vals = []
+colors = []
+levs = []
+for col in len_over_t.columns:
+   levs.append(col)
+   vals.append(len_over_t[col])
+   colors.append(level_colors[col])
+
+ax = plt.hist(x=vals, color=colors, bins=10, normed=True, alpha=0.7)
+plt.xlabel("Overloaded Length")
+plt.legend(levs)
+
+file_name = 'overloaded_length_hist'
+fig.savefig(plot_dir + file_name + '.pdf')
+fig.savefig(plot_dir + file_name + '.png')
 
 # All s_rel over Comparison per level
 s_rel_over_per_lev = { key : [] for key in all_levels }
@@ -451,7 +574,6 @@ for df in [line_df, mv_line_df]:
                 s_rel_over_per_lev[lev].append(s_rel)
 
 
-## Plot
 plt_name = "Relative overload Hist"
 fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(8,4)
@@ -464,17 +586,20 @@ for key, value in s_rel_over_per_lev.items():
    vals.append(value)
    colors.append(level_colors[key])
 
-bins = [0, .1, .2, .3, .4, .5, .6, .7, 0.8, 0.9, 1]
-ax = plt.hist(x=vals, color=colors, bins=bins, normed=True)
+bins = [0, .1, .2, .3, .4, .5, .6, .7, 0.8, 0.9, 1., 1.1, 1.2, 1.3]
+ax = plt.hist(x=vals, color=colors, bins=bins, normed=True, alpha = 0.7)
 plt.xlabel("Relative overload")
 plt.legend(levs)
-
 
 file_name = 'rel_overload_hist'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
 
-##########################
+
+
+
+
+
 
 
 # Hier noch Zeitreihen für Load
