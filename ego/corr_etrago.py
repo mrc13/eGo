@@ -11,7 +11,6 @@ __author__ = "maltesc"
 from etrago.appl import etrago
 from etrago.tools.io import results_to_oedb
 from egoio.tools import db
-from ego.tools import corr_io
 from ego.tools.specs import get_scn_name_from_result_id
 
 ### Sub Packages
@@ -47,11 +46,11 @@ args = {
   'method': 'lopf',
   'minimize_loading': False,
   'network_clustering': False,
-  'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
+  'snapshot_clustering':2, ## evtl. snapshot clustering noch. ausprobieren
   'parallelisation': True, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
   'reproduce_noise': 'noise_values.csv',
-  'results': 'results',
+  'results': 'results/snap_test',
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
@@ -60,7 +59,7 @@ args = {
 args['user_name'] = 'malte_scharf'
 ## eTraGo iteration parameters
 b_factor = [None] ### ACHTUNG richtigen eTraGo branch aussuchen!!!!
-snapshots = [(1, 168)]
+snapshots = [(1, 72)]
 
 comments = [""]
 

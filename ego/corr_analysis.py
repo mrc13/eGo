@@ -39,7 +39,7 @@ data_set = '2018-03-17'
 result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + data_set + '/'
 
 # Directories
-now = strftime("%Y-%m-%d %H:%M", localtime())
+now = strftime("%Y-%m-%d_%H%M", localtime())
 
 analysis_dir = 'corr_results/' + str(result_id) + '/analysis/' + now + '/'
 if not os.path.exists(analysis_dir):
@@ -49,18 +49,13 @@ plot_dir = analysis_dir + 'plots/'
 if not os.path.exists(plot_dir):
     os.makedirs(plot_dir)
 
-tex_file = open(analysis_dir + 'tex_file.txt','w')
-def add_figure_to_tex ():
-    tex_file.write('''
+readme = open(analysis_dir + 'readme','w')
+readme.write(r'''
+I have calculated 200 hours for whole Germany. 404 Ding0 grids.
+I have chosen 1.0 for MV overload and 0.85 for HV overload
 
-
-
-
-
-
-    ''')
-    '%s %s' % ('one', 'two')
-
+''')
+readme.close()
 #%% Basic functions and Dicts
 
 #hv_levels = pd.unique(line_df['v_nom']).tolist()
@@ -106,6 +101,18 @@ def get_volt_from_lev (v_lev):
 
 def get_hour_of_year (v_d):
     return ((v_d.timetuple().tm_yday-1) * 24 + v_d.hour + 1)
+
+def add_figure_to_tex (v_file_name, v_title):
+    tex_file = open(plot_dir + v_file_name + '.txt','w')
+    tex_file.write(r'''
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=\textwidth]{graphics/pyplots/%s/plots/%s.png}
+	\caption{%s}
+	\label{img:%s}
+\end{figure}
+    ''' % (now, v_file_name, v_title, v_file_name))
+    tex_file.close()
 
 #%% Data import
 try:
@@ -253,8 +260,8 @@ mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
 mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
                             [['MV_grid_id','p_mean']].set_index('MV_grid_id')
 
-# ToDo: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
-# ToDo: Hierfür besser direkt über eDisGo Generatoren arbeiten.
+#TODO: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
+#TODO: Hierfür besser direkt über eDisGo Generatoren arbeiten.
 try:
     mv_gens_df = gens_df.merge(all_hvmv_subst_df,
                   how='inner',
@@ -355,6 +362,7 @@ hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf
 
 #%% Electrical Overview
 
+plt_name = "Electrical Overview"
 fig, ax = plt.subplots(1, 4) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(12,5)
 vals = []
@@ -382,6 +390,7 @@ for idx, lev in enumerate(all_levels):
 file_name = 's_nom_hist'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 
 #%% Corr Germany Calcs
@@ -431,11 +440,11 @@ for col in len_over_t_norm.columns:
 #%% Corr Germany Plots
 # Corr
 corr_s_sum_len_over_t = s_sum_len_over_t.corr(method='pearson')
-corr_s_sum_len_over_t.to_csv(result_dir + 'corr_s_sum_len_over_t.csv', encoding='utf-8')
+corr_s_sum_len_over_t.to_csv(analysis_dir + 'corr_s_sum_len_over_t.csv', encoding='utf-8')
 
 corr_len_over_t = len_over_t.corr(method='pearson')
-corr_len_over_t.to_csv(result_dir + 'corr_len_over_t.csv', encoding='utf-8')
-
+corr_len_over_t.to_csv(analysis_dir + 'corr_len_over_t.csv', encoding='utf-8')
+# Werte müssen noch gerundet werden!!!! Rundung überall beachten!!
 ## Plot
 ##% Line Plots
 ##%% Capacity
@@ -454,6 +463,7 @@ plt.ylabel('Total overloading in GVAkm')
 file_name = 'overl_per_level_in_GVAkm'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 plt_name = "Relative total Line Overloading Germany"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
@@ -470,6 +480,7 @@ plt.ylabel('Relative total overloading in percent')
 file_name = 'rel_overl_per_level_in_perc'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 ##%% Length
 plt_name = "Length of overloaded Lines Germany"
@@ -487,6 +498,7 @@ plt.ylabel('length of overloaded lines in km')
 file_name = 'overl_per_level_in_km'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 plt_name = "Length of overloaded Lines Germany (normalized)"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
@@ -503,8 +515,10 @@ plt.ylabel('Total overloading in % of grid length')
 file_name = 'overl_per_level_in_perc'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 ##% Scatter Plots
+plt_name = "Correlation of Overloaded grid Length"
 for x_lev in len_over_t.columns:
     fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
     fig.set_size_inches(12,6)
@@ -541,6 +555,7 @@ for x_lev in len_over_t.columns:
     file_name = 'loading_corr_' + x_lev
     fig.savefig(plot_dir + file_name + '.pdf')
     fig.savefig(plot_dir + file_name + '.png')
+    add_figure_to_tex(file_name, plt_name)
 
 ##% Histograms
 plt_name = "Overloaded Length Histogram"
@@ -562,6 +577,7 @@ plt.legend(levs)
 file_name = 'overloaded_length_hist'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 # All s_rel over Comparison per level
 s_rel_over_per_lev = { key : [] for key in all_levels }
@@ -594,6 +610,7 @@ plt.legend(levs)
 file_name = 'rel_overload_hist'
 fig.savefig(plot_dir + file_name + '.pdf')
 fig.savefig(plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name)
 
 
 
@@ -601,13 +618,20 @@ fig.savefig(plot_dir + file_name + '.png')
 
 
 
+#TODO Hier noch Zeitreihen für Load
+#TODO Hier noch Zeitreihen für Generatoren (auch Deutschlandweit)
 
-# Hier noch Zeitreihen für Load
-# Hier noch Zeitreihen für Generatoren (auch Deutschlandweit)
+#TODO Gucken welche Leitungen am häufigsten überlastet werden.
+#TODO Da auf Deutschlandebene quasi keine Korrelation, die Korrelation mit der Windeinspeisung suchen und gucken ob höher, als z.b. mit Kohle
 
-# Gucken welche Leitungen am häufigsten überlastet werden.
-# Überlastung auch in Leitungslänge messen und dann Korrelationen suchen
-# Da auf Deutschlandebene quasi keine Korrelation, die Korrelation mit der Windeinspeisung suchen und gucken ob höher, als z.b. mit Kohle
+
+
+
+#%% Corr District Calcs
+
+
+
+
 
 
 
@@ -924,6 +948,8 @@ plot_df.plot(
         color='violet',
         markersize=200,
         ax=ax1)
+
+
 
 
 ## Hier Trafos als Punkte Plotten.
