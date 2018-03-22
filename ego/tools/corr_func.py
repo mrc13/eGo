@@ -13,7 +13,7 @@ def corr_district (**kwargs):
     snap_idx = kwargs.get('snap_idx')
     line_df = kwargs.get('line_df')
     mv_line_df = kwargs.get('mv_line_df')
-    trafo_df = kwargs.get('trafo_df')
+#    trafo_df = kwargs.get('trafo_df')
     mv_trafo_df = kwargs.get('mv_trafo_df')
     level_colors = kwargs.get('level_colors')
 #    dist_dir = kwargs.get('dist_dir')
@@ -40,9 +40,9 @@ def corr_district (**kwargs):
 
 
         ## Gets all hv/ehv trafos in this mv grid.
-        mv_grid_hv_trafo_df = trafo_df.loc[
-                trafo_df['geometry'].within(grid_buffer)
-                ]
+#        mv_grid_hv_trafo_df = trafo_df.loc[
+#                trafo_df['geometry'].within(grid_buffer)
+#                ]
 
         ## All relevant voltages in this grid district
         dist_volts = []
@@ -52,8 +52,8 @@ def corr_district (**kwargs):
         dist_volts.append(row['v_nom1'])
 
         ### HV/EHV and UHV/EHV Trafo voltages
-        dist_volts.extend(mv_grid_hv_trafo_df['v_nom0'].tolist())       # The idea is that a voltage level only counts when there is a trafo connection to it.
-        dist_volts.extend(mv_grid_hv_trafo_df['v_nom1'].tolist())
+#        dist_volts.extend(mv_grid_hv_trafo_df['v_nom0'].tolist())       # The idea is that a voltage level only counts when there is a trafo connection to it.
+#        dist_volts.extend(mv_grid_hv_trafo_df['v_nom1'].tolist())
 
         dist_volts = set(dist_volts)
 
@@ -149,15 +149,28 @@ def corr_district (**kwargs):
             plt_name = "Grid District"
             fig, ax1 = plt.subplots(1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
             fig.set_size_inches(6,6)
+            xmin, ymin, xmax, ymax = grid_buffer.bounds
 
+            ax1.set_xlim([xmin,xmax])
+            ax1.set_ylim([ymin,ymax])
 
-            ax1 = add_plot_lines_to_ax(dist_hv_lines_df, ax1, level_colors, 3)
-            ax1 = add_plot_lines_to_ax(dist_mv_lines_df, ax1, level_colors, 1)
-
+            mv_trafo_df = mv_trafo_df.set_geometry('grid_buffer')
             mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
                        alpha = 0.3,
                        color = 'y'
                        )
+            mv_trafo_df = mv_trafo_df.set_geometry('geometry')
+            mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
+                       alpha = 1,
+                       color = 'r',
+                       marker='o',
+                       markersize=300,
+                       facecolors='none'
+                       )
+
+            ax1 = add_plot_lines_to_ax(dist_hv_lines_df, ax1, level_colors, 3)
+            ax1 = add_plot_lines_to_ax(dist_mv_lines_df, ax1, level_colors, 1)
+
 
             file_name = 'district_' + str(mv_grid_id)
             fig.savefig(dist_plot_dir + file_name + '.pdf')

@@ -20,10 +20,6 @@ from dateutil import parser
 import ego.tools.corr_func
 from ego.tools.corr_func import corr_district, get_lev_from_volt, get_volt_from_lev, get_hour_of_year, add_figure_to_tex
 
-import importlib
-importlib.reload(ego.tools.corr_func)
-corr_district = ego.tools.corr_func.corr_district
-
 ## Logging
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
@@ -631,8 +627,6 @@ dist_df = corr_district(snap_idx=snap_idx,
               )
 
 t = dist_df.loc[(dist_df['lev0'] == 'MV') & (dist_df['lev1'] == 'HV')]['r'].dropna()
-
-t.hist()
 
 #### Histogram
 plt_name = "Correlation Histogram"
