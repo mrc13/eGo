@@ -18,7 +18,11 @@ from sklearn.metrics import mean_squared_error, r2_score
 from dateutil import parser
 
 import ego.tools.corr_func
-from ego.tools.corr_func import corr_district, get_lev_from_volt, get_volt_from_lev, get_hour_of_year, add_figure_to_tex
+from ego.tools.corr_func import (add_plot_lines_to_ax,
+                                 get_lev_from_volt,
+                                 get_volt_from_lev,
+                                 get_hour_of_year,
+                                 add_figure_to_tex)
 
 ## Logging
 import logging
@@ -26,12 +30,12 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-fh = logging.FileHandler('corr_anal.log', mode='w')
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-
-logger.addHandler(fh)
+#fh = logging.FileHandler('corr_anal.log', mode='w')
+#fh.setLevel(logging.INFO)
+#formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#fh.setFormatter(formatter)
+#
+#logger.addHandler(fh)
 
 # General Inputs
 cont_fct_hv = 0.85
@@ -223,11 +227,6 @@ mv_trafo_df['v_nom1'] = mv_trafo_df.apply(
 
 mv_trafo_df['p'] = mv_trafo_df.apply(
         lambda x: eval(x['p']), axis=1)
-
-
-#%% Data Cleaning
-
-# ToDo: Clean out faulty MV grids, that e.g. have remote generators...
 
 
 
@@ -614,19 +613,171 @@ add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 #%% Corr District Calcs
 
-dist_df = corr_district(snap_idx=snap_idx,
-              line_df=line_df,
-              mv_line_df=mv_line_df,
-              trafo_df=trafo_df,
-              mv_trafo_df=mv_trafo_df,
-              level_colors=level_colors,
-              dist_dir=dist_dir,
-              dist_plot_dir=dist_plot_dir,
-              dist_corr_dir=dist_corr_dir,
-              make_plot=True
-              )
+columns = [['mv_grid',
+            'lev0',
+            'lev1',
+            'r',
+            'lev0_rel_overl_max',
+            'lev1_rel_overl_max',
+            'cap0',
+            'cap1']]
+dist_df = pd.DataFrame(columns=columns)
 
-t = dist_df.loc[(dist_df['lev0'] == 'MV') & (dist_df['lev1'] == 'HV')]['r'].dropna()
+mv_trafo_df = mv_trafo_df.set_geometry('grid_buffer')
+# Loop through HV/MV Trafos
+for index, row in mv_trafo_df.iterrows():
+
+    mv_grid_id = row['subst_id']
+    grid_buffer = row['grid_buffer']
+
+
+    dist_volts = []
+
+    ## HV/MV Trafo voltages
+    dist_volts.append(row['v_nom0'])
+    dist_volts.append(row['v_nom1'])
+
+    dist_levs = [get_lev_from_volt(volt) for volt in dist_volts]
+
+    # Select all relevant lines
+    ## MV
+    dist_mv_lines_df = mv_line_df.loc[mv_line_df['mv_grid'] == mv_grid_id]
+
+    ## HV
+    dist_hv_lines_df = line_df.loc[
+            [x in dist_volts for x in line_df['v_nom']]
+            ]
+
+    dist_hv_lines_df = dist_hv_lines_df.loc[
+            dist_hv_lines_df['geometry'].intersects(grid_buffer)
+            ]
+
+    # Calculate grid capacity per level
+    columns = dist_levs
+    index =   ['s_nom_length_MVAkm']
+    dist_cap_df = pd.DataFrame(index=index, columns=columns)
+
+    ## HV
+    hv_cap = dist_hv_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
+    for idx, val in hv_cap.iteritems():
+        dist_cap_df.loc['s_nom_length_MVAkm'][idx] = val*1e3
+    ## MV
+    mv_cap = dist_mv_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
+    for idx, val in mv_cap.iteritems():
+        dist_cap_df.loc['s_nom_length_MVAkm'][idx] = val*1e3
+
+    # Overload Dataframe
+    dist_s_sum_len_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=dist_levs)
+
+    dist_s_sum_len_over_t_norm = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=dist_levs)
+
+    for df in [dist_mv_lines_df, dist_hv_lines_df]:
+
+        for i, r in df.iterrows():
+            lev = r['lev']
+
+            s_over_series = pd.Series(data=r['s_over_abs'],
+                                      index=snap_idx)*1e3       # Then in MVAkm
+
+            dist_s_sum_len_over_t[lev] = (  dist_s_sum_len_over_t[lev]
+                                            + s_over_series)
+
+    for col in dist_levs:
+        dist_s_sum_len_over_t_norm[col] = (
+                dist_s_sum_len_over_t[col]
+                / dist_cap_df.loc['s_nom_length_MVAkm'][col]
+                * 100)
+
+    # Correlation
+    corr_df = dist_s_sum_len_over_t.corr()
+
+    lev0 = corr_df.columns[0]
+    lev1 = corr_df.columns[1]
+    r = corr_df.iloc[0][1]
+    lev0_rel_overl_max = dist_s_sum_len_over_t_norm[lev0].max()
+    lev1_rel_overl_max = dist_s_sum_len_over_t_norm[lev1].max()
+    cap0 = dist_cap_df.loc['s_nom_length_MVAkm'][lev0]
+    cap1 = dist_cap_df.loc['s_nom_length_MVAkm'][lev1]
+
+    dist_df = dist_df.append({'mv_grid': mv_grid_id,
+                    'lev0': idx,
+                    'lev1': col,
+                    'r': r,
+                    'lev0_rel_overl_max': lev0_rel_overl_max,
+                    'lev1_rel_overl_max': lev1_rel_overl_max,
+                    'cap0': cap0,
+                    'cap1': cap1},
+                ignore_index=True)
+
+
+    # Cleaning out levels without overload for plots
+    make_plots = True
+    for column in dist_s_sum_len_over_t_norm.columns:
+        max_over = dist_s_sum_len_over_t_norm[column].max()
+        if max_over < 0.2:
+            make_plots = False
+
+    # Plots
+    ## Line
+    if make_plots == True:
+        plt_name = "Relative district overloading"
+        fig, ax1 = plt.subplots(2, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+        fig.set_size_inches(10,6)
+
+
+        dist_s_sum_len_over_t_norm.plot(
+                kind='line',
+                title=plt_name,
+                legend=True,
+                color=[level_colors[lev] for lev in  dist_s_sum_len_over_t.columns],
+                linewidth=2,
+                ax = ax1[0])
+        mvhv_p = pd.Series(data=row['p'], index=snap_idx)
+        mvhv_p.plot(
+                kind='line',
+                ax = ax1[1])
+
+        file_name = 'district_overloading_mv_grid_' + str(mv_grid_id)
+        fig.savefig(dist_plot_dir + file_name + '.pdf')
+        fig.savefig(dist_plot_dir + file_name + '.png')
+        plt.close(fig)
+
+        ## Spatial
+        plt_name = "Grid District"
+        fig, ax1 = plt.subplots(1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+        fig.set_size_inches(6,6)
+        xmin, ymin, xmax, ymax = grid_buffer.bounds
+
+        ax1.set_xlim([xmin,xmax])
+        ax1.set_ylim([ymin,ymax])
+
+        mv_trafo_df = mv_trafo_df.set_geometry('grid_buffer')
+        mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
+                   alpha = 0.3,
+                   color = 'y'
+                   )
+        mv_trafo_df = mv_trafo_df.set_geometry('geometry')
+        mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
+                   alpha = 1,
+                   color = 'r',
+                   marker='o',
+                   markersize=300,
+                   facecolors='none'
+                   )
+
+        ax1 = add_plot_lines_to_ax(dist_hv_lines_df, ax1, level_colors, 3)
+        ax1 = add_plot_lines_to_ax(dist_mv_lines_df, ax1, level_colors, 1)
+
+        file_name = 'district_' + str(mv_grid_id)
+        fig.savefig(dist_plot_dir + file_name + '.pdf')
+        fig.savefig(dist_plot_dir + file_name + '.png')
+        plt.close(fig)
+
+t = dist_df.dropna()
 
 #### Histogram
 plt_name = "Correlation Histogram"

@@ -7,9 +7,8 @@ Create and Update vis tables in corr_analysis
 """
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.automap import automap_base
 from egoio.tools import db
-from egoio.db_tables import model_draft
+
 
 
 ## Logging
@@ -17,13 +16,6 @@ import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger('vis_tables_logger')
-
-fh = logging.FileHandler('/home/student/Git/eGo/ego/vis_tables.log', mode='w')
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-
-logger.addHandler(fh)
 
 ## Connection and implicit mapping
 try:
