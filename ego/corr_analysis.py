@@ -10,13 +10,19 @@ import geopandas as gpd
 import numpy as np
 import scipy
 import os
-
 import shapely.wkt
 from time import localtime, strftime
 from matplotlib import pyplot as plt
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 from dateutil import parser
+
+import ego.tools.corr_func
+from ego.tools.corr_func import corr_district, get_lev_from_volt, get_volt_from_lev, get_hour_of_year, add_figure_to_tex
+
+import importlib
+importlib.reload(ego.tools.corr_func)
+corr_district = ego.tools.corr_func.corr_district
 
 ## Logging
 import logging
@@ -45,9 +51,25 @@ analysis_dir = 'corr_results/' + str(result_id) + '/analysis/' + now + '/'
 if not os.path.exists(analysis_dir):
     os.makedirs(analysis_dir)
 
-plot_dir = analysis_dir + 'plots/'
-if not os.path.exists(plot_dir):
-    os.makedirs(plot_dir)
+ger_dir = analysis_dir + 'ger_analysis/'
+if not os.path.exists(ger_dir):
+    os.makedirs(ger_dir)
+
+ger_plot_dir = ger_dir + 'plots/'
+if not os.path.exists(ger_plot_dir):
+    os.makedirs(ger_plot_dir)
+
+dist_dir = analysis_dir + 'dist_analysis/'
+if not os.path.exists(dist_dir):
+    os.makedirs(dist_dir)
+
+dist_plot_dir = dist_dir + 'plots/'
+if not os.path.exists(dist_plot_dir):
+    os.makedirs(dist_plot_dir)
+
+dist_corr_dir = dist_dir + 'corr/'
+if not os.path.exists(dist_corr_dir):
+    os.makedirs(dist_corr_dir)
 
 readme = open(analysis_dir + 'readme','w')
 readme.write(r'''
@@ -71,48 +93,6 @@ level_colors = {'LV': 'grey',
 
 all_levels = ['MV', 'HV', 'EHV220', 'EHV380']
 
-def get_lev_from_volt (v_voltage): # in kV
-    try:
-        v = float(v_voltage)
-    except:
-        return None
-    if v <= 1:
-        return 'LV'
-    elif (v >= 3) & (v <= 30):
-        return 'MV'
-    elif (v >= 60) & (v <= 110):
-        return 'HV'
-    elif v == 220:
-        return 'EHV220'
-    elif v == 380:
-        return 'EHV380'
-    else: return 'unknown'
-
-def get_volt_from_lev (v_lev):
-    if v_lev == 'MV':
-        return 20. # This is not always true
-    elif v_lev == 'HV':
-        return 110.
-    elif v_lev == 'EHV220':
-        return 220.
-    elif v_lev == 'EHV380':
-        return 380.
-    else: return None
-
-def get_hour_of_year (v_d):
-    return ((v_d.timetuple().tm_yday-1) * 24 + v_d.hour + 1)
-
-def add_figure_to_tex (v_file_name, v_title):
-    tex_file = open(plot_dir + v_file_name + '.txt','w')
-    tex_file.write(r'''
-\begin{figure}[htbp]
-	\centering
-	\includegraphics[width=\textwidth]{graphics/pyplots/%s/plots/%s.png}
-	\caption{%s}
-	\label{img:%s}
-\end{figure}
-    ''' % (now, v_file_name, v_title, v_file_name))
-    tex_file.close()
 
 #%% Data import
 try:
@@ -166,11 +146,12 @@ line_df['lev'] = line_df.apply(
 ## Overload
 line_df['s_over'] = line_df.apply(
         lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
-line_df['s_over_bol'] = line_df.apply(
-        lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 line_df['s_over_abs'] = line_df.apply(
         lambda x: [n * x['s_nom_length_GVAkm'] \
-                   if n else 0 for n in x['s_over_bol']], axis=1)
+                   if n>0 else 0 for n in x['s_over']], axis=1)
+
+line_df['s_over_bol'] = line_df.apply(
+        lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 
 
 # MV Lines
@@ -192,11 +173,14 @@ mv_line_df['lev'] = mv_line_df.apply(
 # Overload
 mv_line_df['s_over'] = mv_line_df.apply(
         lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
-mv_line_df['s_over_bol'] = mv_line_df.apply(
-        lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 mv_line_df['s_over_abs'] = mv_line_df.apply(
         lambda x: [n * x['s_nom_length_GVAkm'] \
-                   if n else 0 for n in x['s_over_bol']], axis=1)
+                   if n>0 else 0 for n in x['s_over']], axis=1)
+
+mv_line_df['s_over_bol'] = mv_line_df.apply(
+        lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
+
+
 
 # Buses
 crs = {'init': 'epsg:4326'}
@@ -227,13 +211,22 @@ mv_trafo_df = mv_trafo_df.drop(['geom', 'point'], axis=1)
 mv_trafo_df['grid_buffer'] = mv_trafo_df['grid_buffer'].map(shapely.wkt.loads)
 
 crs = {'init': 'epsg:3035'}
-mv_griddistricts_df = gpd.GeoDataFrame(mv_trafo_df['grid_buffer'],
+mv_buffer_df = gpd.GeoDataFrame(mv_trafo_df['grid_buffer'],
                                         crs=crs,
                                         geometry='grid_buffer')
-mv_griddistricts_df = mv_griddistricts_df.to_crs({'init': 'epsg:4326'})
-mv_trafo_df['grid_buffer'] = mv_griddistricts_df
+mv_buffer_df = mv_buffer_df.to_crs({'init': 'epsg:4326'})
+mv_trafo_df['grid_buffer'] = mv_buffer_df
 
-del mv_griddistricts_df
+del mv_buffer_df
+
+mv_trafo_df = mv_trafo_df.rename(
+        columns={'v_nom': 'v_nom0'})
+
+mv_trafo_df['v_nom1'] = mv_trafo_df.apply(
+        lambda x: bus_df.loc[x['bus1']]['v_nom'], axis=1)
+
+mv_trafo_df['p'] = mv_trafo_df.apply(
+        lambda x: eval(x['p']), axis=1)
 
 
 #%% Data Cleaning
@@ -388,9 +381,9 @@ for idx, lev in enumerate(all_levels):
     ax[idx].legend((lev,))
 
 file_name = 's_nom_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
+fig.savefig(analysis_dir + file_name + '.pdf')
+fig.savefig(analysis_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, analysis_dir, now)
 
 
 #%% Corr Germany Calcs
@@ -461,9 +454,9 @@ frm = s_sum_len_over_t.plot(
         ax = ax1)
 plt.ylabel('Total overloading in GVAkm')
 file_name = 'overl_per_level_in_GVAkm'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 plt_name = "Relative total Line Overloading Germany"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
@@ -478,9 +471,9 @@ frm = s_sum_len_over_t_norm.plot(
         ax = ax1)
 plt.ylabel('Relative total overloading in percent')
 file_name = 'rel_overl_per_level_in_perc'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 ##%% Length
 plt_name = "Length of overloaded Lines Germany"
@@ -496,9 +489,9 @@ frm = len_over_t.plot(
         ax = ax1)
 plt.ylabel('length of overloaded lines in km')
 file_name = 'overl_per_level_in_km'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 plt_name = "Length of overloaded Lines Germany (normalized)"
 fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
@@ -513,9 +506,9 @@ frm = len_over_t_norm.plot(
         ax = ax1)
 plt.ylabel('Total overloading in % of grid length')
 file_name = 'overl_per_level_in_perc'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 ##% Scatter Plots
 plt_name = "Correlation of Overloaded grid Length"
@@ -553,9 +546,9 @@ for x_lev in len_over_t.columns:
         plt.xlabel(x_lev + ', Overloaded lines in km')
 
     file_name = 'loading_corr_' + x_lev
-    fig.savefig(plot_dir + file_name + '.pdf')
-    fig.savefig(plot_dir + file_name + '.png')
-    add_figure_to_tex(file_name, plt_name)
+    fig.savefig(ger_plot_dir + file_name + '.pdf')
+    fig.savefig(ger_plot_dir + file_name + '.png')
+    add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 ##% Histograms
 plt_name = "Overloaded Length Histogram"
@@ -575,9 +568,9 @@ plt.xlabel("Overloaded Length")
 plt.legend(levs)
 
 file_name = 'overloaded_length_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 # All s_rel over Comparison per level
 s_rel_over_per_lev = { key : [] for key in all_levels }
@@ -608,13 +601,9 @@ plt.xlabel("Relative overload")
 plt.legend(levs)
 
 file_name = 'rel_overload_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name)
-
-
-
-
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 
 
@@ -629,11 +618,29 @@ add_figure_to_tex(file_name, plt_name)
 
 #%% Corr District Calcs
 
+dist_df = corr_district(snap_idx=snap_idx,
+              line_df=line_df,
+              mv_line_df=mv_line_df,
+              trafo_df=trafo_df,
+              mv_trafo_df=mv_trafo_df,
+              level_colors=level_colors,
+              dist_dir=dist_dir,
+              dist_plot_dir=dist_plot_dir,
+              dist_corr_dir=dist_corr_dir,
+              make_plot=True
+              )
 
+t = dist_df.loc[(dist_df['lev0'] == 'MV') & (dist_df['lev1'] == 'HV')]['r'].dropna()
 
+t.hist()
 
+#### Histogram
+plt_name = "Correlation Histogram"
+fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(8,4)
 
-
+bins = [-.4, -.2, 0, .2, .4, .6, .8, 1, 1.2]
+t.plot.hist(alpha = 0.5, bins=bins, ax=ax, color='grey')
 
 
 #%% Plot and Output Data Processing

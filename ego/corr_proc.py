@@ -347,14 +347,11 @@ mv_griddistricts_df['geom'] = mv_griddistricts_df.apply(
 mv_griddistricts_df = mv_griddistricts_df.rename(
         columns={'geom': 'grid_buffer'})
 
-
-
 mv_trafo_df = mv_trafo_df.merge(mv_griddistricts_df,
                                   left_on='subst_id',
                                   right_index=True,
                                   how='left')
 del mv_griddistricts_df
-mv_trafo_df.head()
 
 trafo_df.to_csv(result_dir + 'trafo_df.csv', encoding='utf-8')
 mv_trafo_df.to_csv(result_dir + 'mv_trafo_df.csv', encoding='utf-8')
