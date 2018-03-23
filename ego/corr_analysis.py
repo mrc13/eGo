@@ -313,16 +313,33 @@ mv_rel_calc = mv_grid_info_df.loc['No. of calc. grids']['MV'] / \
 # HV Total
 columns = ['HV', 'EHV220', 'EHV380']
 index =   ['Total. len. in km',
-           'Total. cap. in TVAkm']
+           'Total. cap. in TVAkm',
+           'X/R ratio']
 grid_info_df = pd.DataFrame(index=index, columns=columns)
 
 for col in columns:
     grid_info_df.loc['Total. len. in km'][col] = round(
-            line_df.loc[line_df['v_nom'] == get_volt_from_lev(col)]['length'].sum(), 2)
+            line_df.loc[
+                    line_df['lev'] == col
+                    ]['length'].sum(), 2)
 
 for col in columns:
     grid_info_df.loc['Total. cap. in TVAkm'][col] = round(
-            line_df.loc[line_df['v_nom'] == get_volt_from_lev(col)]['s_nom_length_TVAkm'].sum(), 2)
+            line_df.loc[
+                    line_df['lev'] == col
+                    ]['s_nom_length_TVAkm'].sum(), 2)
+
+for col in columns:
+    x_to_r = []
+    for idx, row in line_df.loc[line_df['lev'] == col].iterrows():
+        x = row['x']
+        r = row['r']
+        if r != 0:
+            x_to_r.append(x/r)
+
+    grid_info_df.loc['X/R ratio'][col] = round(np.mean(x_to_r),2)
+    # TODO: Check if something is wrong with 220kV!!!
+    # Check the standard values for 220kV
 
 grid_info_df.to_csv(analysis_dir + 'grid_info_df.csv', encoding='utf-8')
 

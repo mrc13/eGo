@@ -264,7 +264,7 @@ query = session.query(
         ormclass_result_gen.bus,
         ormclass_result_gen.p_nom,
         ormclass_source.name,
-        ormclass_result_gen.p
+        ormclass_result_gen_t.p
         ).join(ormclass_result_gen_t,
                ormclass_result_gen_t.generator_id == ormclass_result_gen.generator_id
                 ).join(
