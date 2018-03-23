@@ -17,7 +17,6 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 from dateutil import parser
 
-import ego.tools.corr_func
 from ego.tools.corr_func import (add_plot_lines_to_ax,
                                  get_lev_from_volt,
                                  get_volt_from_lev,
@@ -59,6 +58,10 @@ ger_plot_dir = ger_dir + 'plots/'
 if not os.path.exists(ger_plot_dir):
     os.makedirs(ger_plot_dir)
 
+ger_corr_dir = ger_dir + 'corr/'
+if not os.path.exists(ger_corr_dir):
+    os.makedirs(ger_corr_dir)
+
 dist_dir = analysis_dir + 'dist_analysis/'
 if not os.path.exists(dist_dir):
     os.makedirs(dist_dir)
@@ -75,14 +78,10 @@ readme = open(analysis_dir + 'readme','w')
 readme.write(r'''
 I have calculated 200 hours for whole Germany. 404 Ding0 grids.
 I have chosen 1.0 for MV overload and 0.85 for HV overload
-
+Now with Generators
 ''')
 readme.close()
 #%% Basic functions and Dicts
-
-#hv_levels = pd.unique(line_df['v_nom']).tolist()
-#mv_levels = pd.unique(mv_line_df['v_nom']).tolist()
-#all_levels = mv_levels + hv_levels
 
 level_colors = {'LV': 'grey',
                 'MV': 'black',
@@ -92,7 +91,6 @@ level_colors = {'LV': 'grey',
                 'unknown': 'grey'}
 
 all_levels = ['MV', 'HV', 'EHV220', 'EHV380']
-
 
 #%% Data import
 try:
@@ -108,7 +106,8 @@ except:
     logger.warning('No buses imported')
 
 try:
-    gens_df = pd.DataFrame.from_csv(result_dir + 'gens_df.csv', encoding='utf-8')
+    gens_df = pd.DataFrame.from_csv(result_dir + 'gens_df.csv',
+                                    encoding='utf-8')
 except:
     logger.warning('No gens imported')
 
@@ -153,7 +152,6 @@ line_df['s_over_abs'] = line_df.apply(
 line_df['s_over_bol'] = line_df.apply(
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 
-
 # MV Lines
 crs = {'init': 'epsg:4326'}
 mv_line_df = gpd.GeoDataFrame(mv_line_df,
@@ -179,8 +177,6 @@ mv_line_df['s_over_abs'] = mv_line_df.apply(
 
 mv_line_df['s_over_bol'] = mv_line_df.apply(
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
-
-
 
 # Buses
 crs = {'init': 'epsg:4326'}
@@ -228,6 +224,7 @@ mv_trafo_df['v_nom1'] = mv_trafo_df.apply(
 mv_trafo_df['p'] = mv_trafo_df.apply(
         lambda x: eval(x['p']), axis=1)
 
+# Generators
 
 
 #%% Basic grid information
@@ -777,7 +774,56 @@ for index, row in mv_trafo_df.iterrows():
         fig.savefig(dist_plot_dir + file_name + '.png')
         plt.close(fig)
 
+        ## Scatter
+        plt_name = "Correlation of District Overload"
+
+        plot_df = dist_s_sum_len_over_t_norm
+        fig, ax1 = plt.subplots(1)
+        fig.set_size_inches(12,6)
+
+        lev0 = plot_df.columns[0]
+        lev1 = plot_df.columns[1]
+
+        ax1.set_xlim(0, max(plot_df[lev0]))
+        ax1.set_ylim(0, max(plot_df[lev1]))
+
+        plt_name = (lev0
+                    +' and '
+                    + lev1
+                    +' Loading Correlation_'
+                    + str(mv_grid_id))
+
+        plot_df.plot.scatter(
+                x=lev0,
+                y=lev1,
+                color='grey',
+                label=lev1,
+                alpha=0.6,
+                ax=ax1)
+
+        regr = linear_model.LinearRegression()
+        x = plot_df[lev0].values.reshape(len(plot_df), 1)
+        y = plot_df[lev1].values.reshape(len(plot_df), 1)
+        regr.fit(x, y)
+        plt.plot(x, regr.predict(x), color='red', linewidth=1)
+        plt.xlabel('Overloaded lines in %, ' + lev0)
+        plt.ylabel('Overloaded lines in %, ' + lev1)
+
+        file_name = 'loading_corr_' + str(mv_grid_id)
+        fig.savefig(dist_plot_dir + file_name + '.pdf')
+        fig.savefig(dist_plot_dir + file_name + '.png')
+        plt.close(fig)
+
+#TODO Hier weiter...
+#TODO Über Treshhold bei den Korrelationen nachdenken (also, dass erst bei Überlasung auf beiden Ebenen gezählt wird)
+#TODO Gesamtdeutsch unbedingt Generatorein (WInd etc.) Einspeisung plotten.
+
+#TODO Plot mit MV grids anhand Überlastung
+
+#TODO Germany: Plot mit Stunden überlastung pro Leitung
 t = dist_df.dropna()
+dist_df.loc[dist_df['mv_grid'] == 288]
+
 
 #### Histogram
 plt_name = "Correlation Histogram"

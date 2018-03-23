@@ -264,13 +264,16 @@ query = session.query(
         ormclass_result_gen.bus,
         ormclass_result_gen.p_nom,
         ormclass_source.name,
-        ormclass_result_gen_t.p
+        ormclass_result_gen.p
         ).join(ormclass_result_gen_t,
                ormclass_result_gen_t.generator_id == ormclass_result_gen.generator_id
                 ).join(
                 ormclass_source,
                 ormclass_source.source_id == ormclass_result_gen.source
-                )
+                ).filter(
+                ormclass_result_gen.result_id == result_id,
+                ormclass_result_gen_t.result_id == result_id)
+
 gens_df = pd.DataFrame(query.all(),
                       columns=[column['name'] for
                                column in
