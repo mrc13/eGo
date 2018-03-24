@@ -237,7 +237,7 @@ query = session.query(
         mv_buses.v_nom,
         mv_buses.geom,
         mv_buses.p,
-        mv_buses.q
+        mv_buses.v
         ).filter(
                 mv_buses.result_id == result_id)
 

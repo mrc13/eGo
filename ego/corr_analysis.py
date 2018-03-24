@@ -13,6 +13,7 @@ import os
 import shapely.wkt
 from time import localtime, strftime
 from matplotlib import pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
@@ -22,7 +23,9 @@ from ego.tools.corr_func import (add_plot_lines_to_ax,
                                  get_lev_from_volt,
                                  get_volt_from_lev,
                                  get_hour_of_year,
-                                 add_figure_to_tex)
+                                 add_figure_to_tex,
+                                 add_table_to_tex,
+                                 render_mpl_table)
 
 ## Logging
 import logging
@@ -276,7 +279,6 @@ mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
 mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
                             [['MV_grid_id','p_mean']].set_index('MV_grid_id')
 
-
 #TODO: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
 #TODO: Hierfür besser direkt über eDisGo Generatoren arbeiten.
 
@@ -295,10 +297,13 @@ mv_grids_df['Inst. wind cap. in GW'] \
             mv_gens_df['name'] == 'wind'
             ].groupby(['subst_id'])['p_nom'].sum()
 mv_grids_df['Inst. wind cap. in GW'] = mv_grids_df['Inst. wind cap. in GW'].fillna(0)
-del mv_gens_df
 
+## Save
+file_name = 'mv_grid_single'
+file_dir = analysis_dir
+df = mv_grids_df
 
-mv_grids_df.to_csv(analysis_dir + 'mv_grids_df.csv', encoding='utf-8')
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
 
 # MV total
 columns = ['MV']
@@ -342,8 +347,6 @@ mv_grid_info_df.loc['Estim. tot. trans cap. in GVAkm']['MV'] = round(
         mv_grid_info_df.loc['Avg. transm. cap. in GVAkm']['MV'] *\
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
 
-mv_grid_info_df.to_csv(analysis_dir + 'mv_grid_info_df.csv', encoding='utf-8')
-
 mv_rel_calc = mv_grid_info_df.loc['No. of calc. grids']['MV'] / \
         mv_grid_info_df.loc['Tot. no. of grids']['MV']
 
@@ -359,6 +362,21 @@ for idx, row in mv_line_df.iterrows():
 
 mv_grid_info_df.loc['X/R ratio']['MV'] = round( np.sum(x_to_r) ,2)
 del x_to_r, x, r
+
+## Save
+title = 'MV grid overview'
+file_name = 'mv_grid_info'
+file_dir = analysis_dir
+df = mv_grid_info_df
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_mpl_table(df,
+                           header_columns=0,
+                           col_width=3.0,
+                           first_width=5.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+
 # HV Total
 columns = ['HV', 'EHV220', 'EHV380']
 index =   ['Total. len. in km',
@@ -394,9 +412,21 @@ for col in columns:
     grid_info_df.loc['X/R ratio'][col] = round( np.sum(x_to_r) ,2)
     # TODO: Check if something is wrong with 220kV!!!
     # Check the standard values for 220kV
-del x_to_r, x, r
 
-grid_info_df.to_csv(analysis_dir + 'grid_info_df.csv', encoding='utf-8')
+## Save
+title = 'Grid overview'
+file_name = 'grid_info'
+file_dir = analysis_dir
+df = grid_info_df
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_mpl_table(df,
+                           header_columns=0,
+                           col_width=3.0,
+                           first_width=3.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+
 
 # HV/MV Comparison
 columns = ['MV', 'HV', 'EHV220', 'EHV380']
@@ -408,14 +438,23 @@ hvmv_comparison_df.loc['Total. len. in km']['MV'] = mv_grid_info_df.loc['Estim. 
 for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. len. in km'][col] = grid_info_df.loc['Total. len. in km'][col]
 
-hvmv_comparison_df.loc['Total. cap. in TVAkm']['MV'] = mv_grid_info_df.loc['Estim. tot. trans cap. in GVAkm']['MV']/1e3
+hvmv_comparison_df.loc['Total. cap. in TVAkm']['MV'] = round(mv_grid_info_df.loc['Estim. tot. trans cap. in GVAkm']['MV']/1e3, 2)
 for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. cap. in TVAkm'][col] = grid_info_df.loc['Total. cap. in TVAkm'][col]
 
-del columns
-del index
+## Save
+title = 'Total grid overview'
+file_name = 'total_overview'
+file_dir = analysis_dir
+df = hvmv_comparison_df
 
-hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf-8')
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_mpl_table(df,
+                           header_columns=0,
+                           col_width=3.0,
+                           first_width=5.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
 
 # Generators
 index = gens_df.name.unique()
@@ -426,6 +465,9 @@ gen_info['Inst. cap. in GW'] = round(gens_df.groupby(['name'])['p_nom'].sum()/1e
 gen_info = gen_info.drop(['load shedding'])
 
 gen_info.to_csv(analysis_dir + 'gen_info.csv', encoding='utf-8')
+
+
+
 
 #%% Basic grid information Plots
 
@@ -438,8 +480,11 @@ gen_info.to_csv(analysis_dir + 'gen_info.csv', encoding='utf-8')
 #%% Electrical Overview
 
 plt_name = "Electrical Overview"
-fig, ax = plt.subplots(1, 4) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,5)
+file_dir = analysis_dir
+file_name = 's_nom_hist'
+
+fig, ax = plt.subplots(1, 4, sharey=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,4)
 vals = []
 colors = []
 levs = []
@@ -448,24 +493,38 @@ for idx, lev in enumerate(all_levels):
     levs.append(lev)
     if lev == 'MV':
         df = mv_line_df
+        df = df.loc[df['length']>0.3]
     else:
         df = line_df
+        df = df.loc[df['length']>3]
+
     vals.append(df.loc[df['lev'] == lev]['s_nom'])
     colors.append(level_colors[lev])
 
-    #bins = range(0, 2000, 200)
-    pd.Series(vals[idx]).hist(
-                  color=colors[idx],
-                  ax=ax[idx],
-                  bins=10, alpha = 0.7)
+    weights = np.ones_like(vals[idx])/float(len(vals[idx])) * 100
 
-    plt.xlabel("S_nom")
+    counts, bins, patches = ax[idx].hist(
+                  vals[idx],
+                  color=colors[idx],
+                  weights=weights,
+                  bins=8,
+                  alpha=0.7)
+
+    ax[idx].set_xticks(bins)
+    ax[idx].set_xticklabels(bins, rotation=45, rotation_mode="anchor", ha="right")
+    ax[idx].xaxis.set_major_formatter(FormatStrFormatter('%1.0f'))
+#    for label in ax[idx].xaxis.get_ticklabels()[::2]:
+#        label.set_visible(False)       # Every second visible
+
     ax[idx].legend((lev,))
 
-file_name = 's_nom_hist'
-fig.savefig(analysis_dir + file_name + '.pdf')
-fig.savefig(analysis_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, analysis_dir, now)
+
+ax[0].set(ylabel='Relative number of lines in %')
+ax[0].set(xlabel='Thermal rated power in MVA')
+
+## Save
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
 
 
 
@@ -599,82 +658,6 @@ plt.close(fig)
 
 add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
-
-
-
-
-
-
-##% Line Plots
-##%% Capacity
-plt_name = "Total Line Overloading Germany"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-frm = s_sum_len_over_t.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
-        linewidth=2,
-        ax = ax1)
-plt.ylabel('Total overloading in GVAkm')
-file_name = 'overl_per_level_in_GVAkm'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
-
-plt_name = "Relative total Line Overloading Germany"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-frm = s_sum_len_over_t_norm.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
-        linewidth=2,
-        ax = ax1)
-plt.ylabel('Relative total overloading in percent')
-file_name = 'rel_overl_per_level_in_perc'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
-
-##%% Length
-plt_name = "Length of overloaded Lines Germany"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-frm = len_over_t.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
-        linewidth=2,
-        ax = ax1)
-plt.ylabel('length of overloaded lines in km')
-file_name = 'overl_per_level_in_km'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
-
-plt_name = "Length of overloaded Lines Germany (normalized)"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-frm = len_over_t_norm.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
-        linewidth=2,
-        ax = ax1)
-plt.ylabel('Total overloading in % of grid length')
-file_name = 'overl_per_level_in_perc'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
 
 ##% Scatter Plots
 plt_name = "Correlation of Overloaded grid Length"
