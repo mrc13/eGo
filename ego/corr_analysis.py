@@ -13,6 +13,7 @@ import os
 import shapely.wkt
 from time import localtime, strftime
 from matplotlib import pyplot as plt
+
 from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 from dateutil import parser
@@ -38,9 +39,10 @@ logger = logging.getLogger(__name__)
 
 # General Inputs
 cont_fct_hv = 0.85
-cont_fct_mv = 1 # This is ok, simce load will not overload
+cont_fct_mv = 1         # This is ok, simce load will not overload
+r_correct_fct = 2       # Because of a mistake in Freileitung oder Kabel.
 result_id = 384
-data_set = '2018-03-17'
+data_set = '2018-03-23'
 result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + data_set + '/'
 
 # Directories
@@ -79,6 +81,7 @@ readme.write(r'''
 I have calculated 200 hours for whole Germany. 404 Ding0 grids.
 I have chosen 1.0 for MV overload and 0.85 for HV overload
 Now with Generators
+Based on 2018-03-23
 ''')
 readme.close()
 #%% Basic functions and Dicts
@@ -91,6 +94,23 @@ level_colors = {'LV': 'grey',
                 'unknown': 'grey'}
 
 all_levels = ['MV', 'HV', 'EHV220', 'EHV380']
+
+carrier_colors = {
+        "run_of_river" : "royalblue",
+        "uranium" : "greenyellow",
+        "lignite" : "saddlebrown",
+        "coal" : "black",
+        "waste" : "peru",
+        "other_non_renewable" : "salmon",
+        "oil" : "grey",
+        "gas" : "orange",
+        "geothermal" : "indigo",
+        "biomass" : "darkgreen",
+        "reservoir" : "blue",
+        "wind" : "dodgerblue",
+        "solar" : "yellow",
+        "load shedding" : "black"}
+
 
 #%% Data import
 try:
@@ -110,6 +130,12 @@ try:
                                     encoding='utf-8')
 except:
     logger.warning('No gens imported')
+
+try:
+    load_df = pd.DataFrame.from_csv(result_dir + 'load_df.csv',
+                                    encoding='utf-8')
+except:
+    logger.warning('No load imported')
 
 try:
     trafo_df = pd.DataFrame.from_csv(result_dir + 'trafo_df.csv', encoding='utf-8')
@@ -225,9 +251,14 @@ mv_trafo_df['p'] = mv_trafo_df.apply(
         lambda x: eval(x['p']), axis=1)
 
 # Generators
+gens_df['p'] = gens_df.apply(
+        lambda x: eval(x['p']), axis=1)
 
+# Load
+load_df['p'] = load_df.apply(
+        lambda x: eval(x['p']), axis=1)
 
-#%% Basic grid information
+#%% Basic grid information Calcs.
 logger.info('Basic grid information')
 
 # MV single
@@ -245,22 +276,27 @@ mv_grids_df['Avg. feed-in MV'] = - mv_trafo_df[['subst_id',
 mv_grids_df['Avg. feed-in HV'] = bus_df.loc[~np.isnan(bus_df['MV_grid_id'])]\
                             [['MV_grid_id','p_mean']].set_index('MV_grid_id')
 
+
 #TODO: Herausfinden, mit welcher Leistung die MV Trafos angeschlossen werden.
 #TODO: Hierfür besser direkt über eDisGo Generatoren arbeiten.
-try:
-    mv_gens_df = gens_df.merge(all_hvmv_subst_df,
-                  how='inner',
-                  left_on='bus',
-                  right_on='bus_id')
 
-    mv_gens_df = mv_gens_df[mv_gens_df['name'] != 'load shedding']
-    mv_gens_df = mv_gens_df.dropna() # I think this is also load shedding
-    ## Find out how much load shedding is done...
+mv_gens_df = gens_df.merge(all_hvmv_subst_df,
+              how='inner',
+              left_on='bus',
+              right_on='bus_id')
 
-    mv_grids_df['Inst. gen. capacity'] = mv_gens_df.groupby(['subst_id'])['p_nom'].sum()
-    del mv_gens_df
-except:
-    logger.warning('Inst. gen. capacity could not be imported')
+mv_gens_df = mv_gens_df[mv_gens_df['name'] != 'load shedding']
+
+mv_grids_df['Inst. gen. capacity'] = mv_gens_df.groupby(['subst_id'])['p_nom'].sum()
+mv_grids_df['Inst. gen. capacity'] = mv_grids_df['Inst. gen. capacity'].fillna(0)
+
+mv_grids_df['Inst. wind cap. in GW'] \
+    = mv_gens_df.loc[
+            mv_gens_df['name'] == 'wind'
+            ].groupby(['subst_id'])['p_nom'].sum()
+mv_grids_df['Inst. wind cap. in GW'] = mv_grids_df['Inst. wind cap. in GW'].fillna(0)
+del mv_gens_df
+
 
 mv_grids_df.to_csv(analysis_dir + 'mv_grids_df.csv', encoding='utf-8')
 
@@ -274,7 +310,8 @@ index =   ['Tot. no. of grids',
            'Estim. tot. len. in km',
            'Tot. calc. cap in GVAkm',
            'Avg. transm. cap. in GVAkm',
-           'Estim. tot. trans cap. in GVAkm']
+           'Estim. tot. trans cap. in GVAkm',
+           'X/R ratio']
 mv_grid_info_df = pd.DataFrame(index=index, columns=columns)
 
 mv_grid_info_df.loc['Tot. no. of grids']['MV'] = len(all_hvmv_subst_df)
@@ -310,6 +347,18 @@ mv_grid_info_df.to_csv(analysis_dir + 'mv_grid_info_df.csv', encoding='utf-8')
 mv_rel_calc = mv_grid_info_df.loc['No. of calc. grids']['MV'] / \
         mv_grid_info_df.loc['Tot. no. of grids']['MV']
 
+x_to_r = []
+for idx, row in mv_line_df.iterrows():
+    x = row['x']
+    r = row['r']
+    try:
+        x_to_r.append(x/r * (row['length']
+                             /mv_grid_info_df.loc['Tot. calc. length in km']['MV']))
+    except:
+        logger.warning('no r=0')
+
+mv_grid_info_df.loc['X/R ratio']['MV'] = round( np.sum(x_to_r) ,2)
+del x_to_r, x, r
 # HV Total
 columns = ['HV', 'EHV220', 'EHV380']
 index =   ['Total. len. in km',
@@ -334,12 +383,18 @@ for col in columns:
     for idx, row in line_df.loc[line_df['lev'] == col].iterrows():
         x = row['x']
         r = row['r']
-        if r != 0:
-            x_to_r.append(x/r)
+        if (col == 'EHV220'):
+            r = r/r_correct_fct
+        try:
+            x_to_r.append(x/r * (row['length']
+                                 /grid_info_df.loc['Total. len. in km'][col]))
+        except:
+            logger.warning('no r=0')
 
-    grid_info_df.loc['X/R ratio'][col] = round(np.mean(x_to_r),2)
+    grid_info_df.loc['X/R ratio'][col] = round( np.sum(x_to_r) ,2)
     # TODO: Check if something is wrong with 220kV!!!
     # Check the standard values for 220kV
+del x_to_r, x, r
 
 grid_info_df.to_csv(analysis_dir + 'grid_info_df.csv', encoding='utf-8')
 
@@ -361,6 +416,24 @@ del columns
 del index
 
 hvmv_comparison_df.to_csv(analysis_dir + 'hvmv_comparison_df.csv', encoding='utf-8')
+
+# Generators
+index = gens_df.name.unique()
+columns = []
+gen_info = pd.DataFrame(index=index, columns=columns)
+
+gen_info['Inst. cap. in GW'] = round(gens_df.groupby(['name'])['p_nom'].sum()/1e3, 2)
+gen_info = gen_info.drop(['load shedding'])
+
+gen_info.to_csv(analysis_dir + 'gen_info.csv', encoding='utf-8')
+
+#%% Basic grid information Plots
+
+
+
+
+
+
 
 #%% Electrical Overview
 
@@ -395,9 +468,12 @@ fig.savefig(analysis_dir + file_name + '.png')
 add_figure_to_tex(file_name, plt_name, analysis_dir, now)
 
 
+
+
 #%% Corr Germany Calcs
 
-# Total grid overload per voltage level in GVAkm and km  and relative
+# Line Overload per voltage level
+## Total
 s_sum_len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
@@ -405,6 +481,7 @@ s_sum_len_over_t = pd.DataFrame(0.0,
 len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
+
 
 for df in [line_df, mv_line_df]:
 
@@ -425,7 +502,7 @@ for df in [line_df, mv_line_df]:
 s_sum_len_over_t['MV'] = s_sum_len_over_t['MV'] / mv_rel_calc
 len_over_t['MV'] = len_over_t['MV'] / mv_rel_calc # For MV, the calculated values must be estimated for the entire grid
 
-
+## Relative
 s_sum_len_over_t_norm = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
@@ -438,8 +515,32 @@ for col in s_sum_len_over_t_norm.columns:
 for col in len_over_t_norm.columns:
     len_over_t_norm[col] = len_over_t[col] / hvmv_comparison_df.loc['Total. len. in km'][col] * 100
 
+# Generators
+
+columns = [car for car in carrier_colors.keys()]
+gen_dispatch_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=columns)
+
+for idx, row in gens_df.iterrows():
+    name = row['name']
+    p_series = pd.Series(data=row['p'], index=snap_idx)
+    gen_dispatch_t[name] = gen_dispatch_t[name] + p_series
+
+#gen_dispatch_t['total'] = gen_dispatch_t.apply(
+#        lambda x: pd.Series([x[n] for n in columns]).sum(), axis=1)
+
+# Load
+load_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=['load'])
+
+for idx, row in load_df.iterrows():
+    p_series = pd.Series(data=row['p'], index=snap_idx)
+    load_t['load'] = load_t['load'] + p_series
 
 #%% Corr Germany Plots
+
 # Corr
 corr_s_sum_len_over_t = s_sum_len_over_t.corr(method='pearson')
 corr_s_sum_len_over_t.to_csv(analysis_dir + 'corr_s_sum_len_over_t.csv', encoding='utf-8')
@@ -447,7 +548,63 @@ corr_s_sum_len_over_t.to_csv(analysis_dir + 'corr_s_sum_len_over_t.csv', encodin
 corr_len_over_t = len_over_t.corr(method='pearson')
 corr_len_over_t.to_csv(analysis_dir + 'corr_len_over_t.csv', encoding='utf-8')
 # Werte müssen noch gerundet werden!!!! Rundung überall beachten!!
+
+
 ## Plot
+##% Overview plot
+plt_name = "Overview Germany"
+fig, ax = plt.subplots(3, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,8)
+
+frm = s_sum_len_over_t.plot(
+        kind='area',
+        legend=True,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=.5,
+        alpha=0.7,
+        ax = ax[0])
+leg = ax[0].legend(loc='upper right',
+          ncol=2, fancybox=True, shadow=True, fontsize=9)
+leg.get_frame().set_alpha(0.5)
+ax[0].set(ylabel='Overloading in GVAkm')
+
+frm = len_over_t_norm.plot(
+        kind='line',
+        legend=False,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=2,
+        alpha=0.7,
+        ax = ax[1])
+#leg = ax[1].legend(loc='upper right',
+#          ncol=2, fancybox=True, shadow=True, fontsize=9)
+#leg.get_frame().set_alpha(0.5)
+ax[1].set(ylabel='Overloaded length in %')
+
+frm = (gen_dispatch_t/1e3).plot(
+        kind='area',
+        legend=True,
+        color=[carrier_colors[name] for name in  gen_dispatch_t.columns],
+        linewidth=.5,
+        alpha=0.7,
+        ax = ax[2])
+leg = ax[2].legend(loc='upper right',
+          ncol=7, fancybox=True, shadow=True, fontsize=9)
+leg.get_frame().set_alpha(0.5)
+ax[2].set(ylabel='Power generation GW')
+
+file_name = 'overview_germany'
+fig.savefig(ger_plot_dir + file_name + '.pdf')
+fig.savefig(ger_plot_dir + file_name + '.png')
+plt.close(fig)
+
+add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
+
+
+
+
+
+
+
 ##% Line Plots
 ##%% Capacity
 plt_name = "Total Line Overloading Germany"
