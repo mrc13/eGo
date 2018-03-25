@@ -19,13 +19,17 @@ from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 from dateutil import parser
 
-from ego.tools.corr_func import (add_plot_lines_to_ax,
+from ego.tools.corr_func import (color_for_s_over,
+                                 add_plot_lines_to_ax,
+                                 add_weighted_plot_lines_to_ax,
                                  get_lev_from_volt,
                                  get_volt_from_lev,
                                  get_hour_of_year,
                                  add_figure_to_tex,
                                  add_table_to_tex,
-                                 render_mpl_table)
+                                 render_mpl_table,
+                                 render_corr_table,
+                                 to_str)
 
 ## Logging
 import logging
@@ -42,10 +46,11 @@ logger = logging.getLogger(__name__)
 
 # General Inputs
 cont_fct_hv = 0.85
-cont_fct_mv = 1         # This is ok, simce load will not overload
+cont_fct_mv = 1
+over_voltage_mv = 1.05
 r_correct_fct = 2       # Because of a mistake in Freileitung oder Kabel.
 result_id = 384
-data_set = '2018-03-23'
+data_set = '2018-03-25'
 result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + data_set + '/'
 
 # Directories
@@ -172,14 +177,24 @@ line_df['lev'] = line_df.apply(
         lambda x: get_lev_from_volt(x['v_nom']), axis=1)
 
 ## Overload
-line_df['s_over'] = line_df.apply(
+line_df['s_over'] = line_df.apply(          ## Relative in 1
         lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
-line_df['s_over_abs'] = line_df.apply(
+line_df['s_over_abs'] = line_df.apply(      ## Absoulute in GVAkm
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n>0 else 0 for n in x['s_over']], axis=1)
 
-line_df['s_over_bol'] = line_df.apply(
+line_df['s_over_bol'] = line_df.apply(      ## Boolean
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
+
+line_df['s_over_max'] = line_df.apply(      ## Relative in 1
+        lambda x:  max(x['s_over']) if max(x['s_over']) > 0 else 0, axis=1)
+line_df['s_over_dur'] = line_df.apply(      ## Relative in 1
+        lambda x:  sum(x['s_over_bol'])/len(snap_idx), axis=1)
+
+# Country links
+cntry_links = [24430, 24431, 24432, 24433, 24410, 24411, 24414, 24415, 24416, 24417, 24418, 24419, 24420, 24421, 24422, 24423, 24424, 24425, 24426, 24427, 24428, 24429, 24434, 24435, 24436, 24437, 24438, 24439, 24440, 24441, 24442, 24443, 24444, 24445, 24446, 24447, 24448, 24449, 24450, 24451, 24452, 24453, 24454, 24455, 24456, 24457, 24458, 24459, 2288, 2323, 2402, 24460, 24461, 24462, 3555, 24463, 3848, 3923, 24464, 24465, 4085, 4198, 4453, 4521, 24466, 24467, 4783, 24468, 4868, 24469, 24470, 24471, 24472, 5300, 5384, 5552, 5520, 24473, 24474, 6229, 6230, 6290, 6440, 6480, 6730, 6792, 6815, 6896, 6991, 7120, 7382, 7395, 7437, 7445, 7464, 7466, 7467, 7535, 7700, 7763, 7775, 7821, 7886, 7932, 7991, 7992, 8029, 8059, 8691, 8718, 9729, 10882, 10930, 10992, 11087, 11169, 11282, 11436, 11445, 11561, 11662, 11942, 12007, 12362, 12436, 12686, 12697, 13022, 13025, 13071, 13064, 13148, 13270, 13308, 13310, 13337, 13361, 13415, 13719, 13848, 13850, 13913, 13921, 13972, 14077, 14139, 14152, 14176, 15047, 15195, 15340, 15907, 16093, 16135, 16140, 16349, 16577, 16844, 17150, 17460, 17756, 17821, 17906, 17954, 18646, 18651, 19627, 19767, 19995, 20031, 20082, 20320, 21279, 21412, 22354, 22390, 22457, 22994, 23162, 23441, 23484, 23623, 23596, 23650, 23655, 23706, 23700, 23701, 23746, 23752, 23774, 23911, 24147, 24316, 24254, 24295]
+cntry_links_df = line_df.loc[cntry_links]
+line_df = line_df.drop(cntry_links, axis=0)
 
 # MV Lines
 crs = {'init': 'epsg:4326'}
@@ -198,14 +213,19 @@ mv_line_df['s_rel'] = mv_line_df.apply(
 mv_line_df['lev'] = mv_line_df.apply(
         lambda x: get_lev_from_volt(x['v_nom']), axis=1)
 # Overload
-mv_line_df['s_over'] = mv_line_df.apply(
+mv_line_df['s_over'] = mv_line_df.apply(          ## Relative in 1
         lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
-mv_line_df['s_over_abs'] = mv_line_df.apply(
+mv_line_df['s_over_abs'] = mv_line_df.apply(      ## Absoulute in GVAkm
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n>0 else 0 for n in x['s_over']], axis=1)
 
-mv_line_df['s_over_bol'] = mv_line_df.apply(
+mv_line_df['s_over_bol'] = mv_line_df.apply(      ## Boolean
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
+
+mv_line_df['s_over_max'] = mv_line_df.apply(      ## Relative in 1
+        lambda x:  max(x['s_over']) if max(x['s_over']) > 0 else 0, axis=1)
+mv_line_df['s_over_dur'] = mv_line_df.apply(      ## Relative in 1
+        lambda x:  sum(x['s_over_bol'])/len(snap_idx), axis=1)
 
 # Buses
 crs = {'init': 'epsg:4326'}
@@ -219,7 +239,25 @@ mv_bus_df = gpd.GeoDataFrame(mv_bus_df,
                              crs=crs,
                              geometry=mv_bus_df.geom.map(shapely.wkt.loads))
 mv_bus_df = mv_bus_df.drop(['geom'], axis=1)
+#mv_bus_df['mv_grid'] = mv_bus_df.apply(
+#        lambda x: ((mv_line_df.loc[mv_line_df['bus0'] == str(x.index)]['mv_grid'])
+#        | (mv_line_df.loc[mv_line_df['bus1'] == str(x.index)]['mv_grid'])),
+#        axis=1)            # This is very slow
 
+# LV Stations
+lv_stations = mv_bus_df.loc[
+        mv_bus_df.reset_index()[
+                'name'
+                ].str.startswith('LVStation').tolist()]
+
+lv_stations['v'] = lv_stations.apply(
+        lambda x: eval(x['v']), axis=1)
+
+lv_stations['v_over_bol'] = lv_stations.apply(
+        lambda x: [True if n > over_voltage_mv else False for n in x['v']],
+        axis=1)
+
+# Transformers
 crs = {'init': 'epsg:4326'}
 trafo_df = gpd.GeoDataFrame(trafo_df,
                             crs=crs,
@@ -464,10 +502,23 @@ gen_info = pd.DataFrame(index=index, columns=columns)
 gen_info['Inst. cap. in GW'] = round(gens_df.groupby(['name'])['p_nom'].sum()/1e3, 2)
 gen_info = gen_info.drop(['load shedding'])
 
-gen_info.to_csv(analysis_dir + 'gen_info.csv', encoding='utf-8')
+## Save
+title = 'Generators overview'
+file_name = 'gen_overview'
+file_dir = analysis_dir
+df = gen_info
 
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_mpl_table(df,
+                           header_columns=0,
+                           col_width=3.0,
+                           first_width=5.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
 
-
+# TODO: Make line plot
+# Statt dem ganze round, kann ich hier applymap mit to_str anwenden!!!!!!!!!!!!
+#!!!!!
 
 #%% Basic grid information Plots
 
@@ -575,7 +626,6 @@ for col in len_over_t_norm.columns:
     len_over_t_norm[col] = len_over_t[col] / hvmv_comparison_df.loc['Total. len. in km'][col] * 100
 
 # Generators
-
 columns = [car for car in carrier_colors.keys()]
 gen_dispatch_t = pd.DataFrame(0.0,
                                    index=snap_idx,
@@ -598,22 +648,64 @@ for idx, row in load_df.iterrows():
     p_series = pd.Series(data=row['p'], index=snap_idx)
     load_t['load'] = load_t['load'] + p_series
 
-#%% Corr Germany Plots
+# Voltage
+voltage_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=['MV_volt'])
+
+for idx, row in lv_stations.iterrows():
+    volt_over_series = pd.Series(data=row['v_over_bol'], index=snap_idx)
+    voltage_over_t ['MV_volt'] = voltage_over_t ['MV_volt'] + volt_over_series
+
+voltage_over_t_norm = voltage_over_t / len(lv_stations) * 100
+
+
+#%% Corr Germany Corr and Plots
 
 # Corr
-corr_s_sum_len_over_t = s_sum_len_over_t.corr(method='pearson')
-corr_s_sum_len_over_t.to_csv(analysis_dir + 'corr_s_sum_len_over_t.csv', encoding='utf-8')
+considered_carriers = ['solar',
+                       'wind',
+                       'coal',
+                       'lignite',
+                       'uranium']
+gen_dispatch_t_subset = gen_dispatch_t[considered_carriers]
+corr_ger_df = s_sum_len_over_t.merge(gen_dispatch_t_subset,
+                       left_index=True,
+                       right_index=True
+                       ).merge(
+                               load_t,
+                               left_index=True,
+                               right_index=True
+                               ).merge(
+                                       voltage_over_t,
+                                       left_index=True,
+                                       right_index=True).corr(method='pearson')
 
-corr_len_over_t = len_over_t.corr(method='pearson')
-corr_len_over_t.to_csv(analysis_dir + 'corr_len_over_t.csv', encoding='utf-8')
-# Werte müssen noch gerundet werden!!!! Rundung überall beachten!!
+corr_ger_df = corr_ger_df.drop(considered_carriers, axis=0)
+corr_ger_df = corr_ger_df.drop('load', axis=0)
+
+## Save
+title = 'Correlation Germany'
+file_name = 'corr_ger'
+file_dir = ger_corr_dir
+df = corr_ger_df
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=1.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
 
 
-## Plot
-##% Overview plot
+# Plot
+## Overview plot
 plt_name = "Overview Germany"
-fig, ax = plt.subplots(3, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,8)
+file_dir = ger_plot_dir
+
+fig, ax = plt.subplots(4, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig.set_size_inches(12,10)
 
 frm = s_sum_len_over_t.plot(
         kind='area',
@@ -637,7 +729,19 @@ frm = len_over_t_norm.plot(
 #leg = ax[1].legend(loc='upper right',
 #          ncol=2, fancybox=True, shadow=True, fontsize=9)
 #leg.get_frame().set_alpha(0.5)
-ax[1].set(ylabel='Overloaded length in %')
+ax[1].set(ylabel='Overl. length in %')
+
+frm = voltage_over_t_norm.plot(
+        kind='line',
+        legend=True,
+        color='black',
+        linewidth=2,
+        alpha=0.7,
+        ax = ax[2])
+leg = ax[2].legend(loc='upper right',
+          ncol=1, fancybox=True, shadow=True, fontsize=9)
+leg.get_frame().set_alpha(0.5)
+ax[2].set(ylabel='Volt. issues in % of buses')
 
 frm = (gen_dispatch_t/1e3).plot(
         kind='area',
@@ -645,22 +749,20 @@ frm = (gen_dispatch_t/1e3).plot(
         color=[carrier_colors[name] for name in  gen_dispatch_t.columns],
         linewidth=.5,
         alpha=0.7,
-        ax = ax[2])
-leg = ax[2].legend(loc='upper right',
+        ax = ax[3])
+leg = ax[3].legend(loc='upper right',
           ncol=7, fancybox=True, shadow=True, fontsize=9)
 leg.get_frame().set_alpha(0.5)
-ax[2].set(ylabel='Power generation GW')
+ax[3].set(ylabel='Generation in GW')
 
 file_name = 'overview_germany'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
-
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
-
 
 ##% Scatter Plots
 plt_name = "Correlation of Overloaded grid Length"
+file_dir = ger_plot_dir
 for x_lev in len_over_t.columns:
     fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
     fig.set_size_inches(12,6)
@@ -695,33 +797,46 @@ for x_lev in len_over_t.columns:
         plt.xlabel(x_lev + ', Overloaded lines in km')
 
     file_name = 'loading_corr_' + x_lev
-    fig.savefig(ger_plot_dir + file_name + '.pdf')
-    fig.savefig(ger_plot_dir + file_name + '.png')
-    add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
+    fig.savefig(file_dir + file_name + '.png')
+    add_figure_to_tex (plt_name, file_dir, file_name)
+    plt.close(fig)
 
 ##% Histograms
-plt_name = "Overloaded Length Histogram"
+plt_name = "Retative Overloaded Length Histogram"
+file_dir = ger_plot_dir
 fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(8,4)
 
-vals = []
-colors = []
-levs = []
-for col in len_over_t.columns:
+vals, colors, levs, weights = [], [], [], []
+
+for col in len_over_t_norm.columns:
    levs.append(col)
-   vals.append(len_over_t[col])
+   vals.append(len_over_t_norm[col])
+   weights.append(
+           np.ones_like(len_over_t_norm[col])
+           /float(len(len_over_t_norm[col]))
+           * 100)
    colors.append(level_colors[col])
 
-ax = plt.hist(x=vals, color=colors, bins=10, normed=True, alpha=0.7)
-plt.xlabel("Overloaded Length")
-plt.legend(levs)
+ax = plt.hist(x=vals,
+              color=colors,
+              bins=10,
+              alpha=0.7,
+              weights=weights)
+plt.xlabel("Overloaded Length in % of total length")
+plt.legend(levs) # Very interesting result. MV grid overloads and HV occurr very local!
 
 file_name = 'overloaded_length_hist'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
+
 
 # All s_rel over Comparison per level
+
+plt_name = "Relative overload Hist"
+file_dir = ger_plot_dir
+
 s_rel_over_per_lev = { key : [] for key in all_levels }
 for df in [line_df, mv_line_df]:
     for index, row in df.iterrows():
@@ -731,38 +846,121 @@ for df in [line_df, mv_line_df]:
             if s_rel > 0:
                 s_rel_over_per_lev[lev].append(s_rel)
 
-
-plt_name = "Relative overload Hist"
-fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+fig, ax = plt.subplots(1,1)
 fig.set_size_inches(8,4)
 
-vals = []
-colors = []
-levs = []
+vals, colors, levs, weights = [], [], [], []
+
 for key, value in s_rel_over_per_lev.items():
    levs.append(key)
    vals.append(value)
+   weights.append(
+           np.ones_like(value)
+           /float(len(value))
+           * 100)
    colors.append(level_colors[key])
 
 bins = [0, .1, .2, .3, .4, .5, .6, .7, 0.8, 0.9, 1., 1.1, 1.2, 1.3]
-ax = plt.hist(x=vals, color=colors, bins=bins, normed=True, alpha = 0.7)
+ax = plt.hist(x=vals,
+              color=colors,
+              bins=bins,
+              weights=weights,
+              alpha = 0.7)
 plt.xlabel("Relative overload")
 plt.legend(levs)
 
 file_name = 'rel_overload_hist'
-fig.savefig(ger_plot_dir + file_name + '.pdf')
-fig.savefig(ger_plot_dir + file_name + '.png')
-add_figure_to_tex(file_name, plt_name, ger_plot_dir, now)
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
 
 
+# Spatial line plots
+## Max overload
+plt_name = "Grid Germany (maximum overload per line)"
+file_dir = ger_plot_dir
 
-#TODO Hier noch Zeitreihen für Load
-#TODO Hier noch Zeitreihen für Generatoren (auch Deutschlandweit)
+fig, ax1 = plt.subplots(1)
+fig.set_size_inches(12,14)
+
+
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[plot_df['lev'] == 'HV'],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=0.2)
+
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[
+                (plot_df['lev'] == 'EHV220') | (plot_df['lev'] == 'EHV380')
+                ],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=1)
+
+plot_df = line_df
+plot_df['color'] = plot_df.apply(
+        lambda x: color_for_s_over(x['s_over_max']), axis=1)
+
+plot_df = plot_df.loc[
+                ((plot_df['lev'] == 'EHV220') | (plot_df['lev'] == 'EHV380'))
+                   ]
+
+ax1 = add_weighted_plot_lines_to_ax(
+        plot_df,
+        v_ax=ax1,
+        v_size=3)
+
+file_name = 'ger_grid_max_overload'
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
+
+## Overload hours
+plt_name = "Grid Germany (overload duration)"
+file_dir = ger_plot_dir
+
+fig, ax1 = plt.subplots(1)
+fig.set_size_inches(12,14)
+
+
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[plot_df['lev'] == 'HV'],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=0.2)
+
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[
+                (plot_df['lev'] == 'EHV220') | (plot_df['lev'] == 'EHV380')
+                ],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=1)
+
+plot_df = line_df
+plot_df['color'] = plot_df.apply(
+        lambda x: color_for_s_over(x['s_over_dur']*2), axis=1)
+
+plot_df = plot_df.loc[
+                ((plot_df['lev'] == 'EHV220') | (plot_df['lev'] == 'EHV380'))
+                   ]
+
+ax1 = add_weighted_plot_lines_to_ax(
+        plot_df,
+        v_ax=ax1,
+        v_size=3)
+
+file_name = 'ger_grid_dur_overload'
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
 
 #TODO Gucken welche Leitungen am häufigsten überlastet werden.
-#TODO Da auf Deutschlandebene quasi keine Korrelation, die Korrelation mit der Windeinspeisung suchen und gucken ob höher, als z.b. mit Kohle
-
-
 
 
 #%% Corr District Calcs
@@ -783,7 +981,7 @@ for index, row in mv_trafo_df.iterrows():
 
     mv_grid_id = row['subst_id']
     grid_buffer = row['grid_buffer']
-
+    bus1 = row['bus1']
 
     dist_volts = []
 
@@ -804,6 +1002,11 @@ for index, row in mv_trafo_df.iterrows():
 
     dist_hv_lines_df = dist_hv_lines_df.loc[
             dist_hv_lines_df['geometry'].intersects(grid_buffer)
+            ]
+
+    # Select all relevant LV stations
+    dist_lv_stations = lv_stations.loc[
+            lv_stations['geometry'].within(grid_buffer)
             ]
 
     # Calculate grid capacity per level
@@ -845,21 +1048,61 @@ for index, row in mv_trafo_df.iterrows():
                 dist_s_sum_len_over_t[col]
                 / dist_cap_df.loc['s_nom_length_MVAkm'][col]
                 * 100)
+    # Generation
+    dist_gen_df = gens_df.loc[gens_df['bus'] == bus1]
+    columns = [
+            car for car in  carrier_colors.keys()
+            if (car in set(dist_gen_df['name']))
+            ]
+
+    dist_gen_dispatch_t = pd.DataFrame(0.0,
+                                       index=snap_idx,
+                                       columns=columns)
+
+    for idx, row in dist_gen_df.iterrows():
+        name = row['name']
+        p_series = pd.Series(data=row['p'], index=snap_idx)
+        dist_gen_dispatch_t[name] = dist_gen_dispatch_t[name] + p_series
+
+    # Load
+    dist_load_df = load_df.loc[load_df['bus'] == bus1]
+    dist_load_t = pd.DataFrame(0.0,
+                                       index=snap_idx,
+                                       columns=['load'])
+
+    for idx, row in dist_load_df.iterrows():
+        p_series = pd.Series(data=row['p'], index=snap_idx)
+        dist_load_t['load'] = dist_load_t['load'] + p_series
+
+    # Voltage
+
+    dist_voltage_over_t = pd.DataFrame(0.0,
+                                       index=snap_idx,
+                                       columns=['MV_volt'])
+
+    for idx, row in dist_lv_stations.iterrows():
+        volt_over_series = pd.Series(data=row['v_over_bol'], index=snap_idx)
+        dist_voltage_over_t['MV_volt'] = dist_voltage_over_t['MV_volt'] + volt_over_series
+
+    dist_voltage_over_t_norm = dist_voltage_over_t / len(dist_lv_stations) * 100
+
 
     # Correlation
-    corr_df = dist_s_sum_len_over_t.corr()
+    threshed_df = dist_s_sum_len_over_t.loc[(dist_s_sum_len_over_t != 0).all(axis=1)]
+
+    corr_df = threshed_df.corr()
 
     lev0 = corr_df.columns[0]
     lev1 = corr_df.columns[1]
     r = corr_df.iloc[0][1]
     lev0_rel_overl_max = dist_s_sum_len_over_t_norm[lev0].max()
-    lev1_rel_overl_max = dist_s_sum_len_over_t_norm[lev1].max()
+    lev1_rel_overl_max = dist_s_sum_len_over_t_norm[lev1].max()         # Better no normalized here...
     cap0 = dist_cap_df.loc['s_nom_length_MVAkm'][lev0]
     cap1 = dist_cap_df.loc['s_nom_length_MVAkm'][lev1]
 
     dist_df = dist_df.append({'mv_grid': mv_grid_id,
-                    'lev0': idx,
-                    'lev1': col,
+                    'lev0': lev0,
+                    'lev1': lev1,
                     'r': r,
                     'lev0_rel_overl_max': lev0_rel_overl_max,
                     'lev1_rel_overl_max': lev1_rel_overl_max,
@@ -878,30 +1121,62 @@ for index, row in mv_trafo_df.iterrows():
     # Plots
     ## Line
     if make_plots == True:
-        plt_name = "Relative district overloading"
-        fig, ax1 = plt.subplots(2, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+        plt_name = "District overloading"
+        file_dir = dist_plot_dir
+
+        fig, ax = plt.subplots(3, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
         fig.set_size_inches(10,6)
 
-
-        dist_s_sum_len_over_t_norm.plot(
+        dist_s_sum_len_over_t.plot(
                 kind='line',
-                title=plt_name,
                 legend=True,
                 color=[level_colors[lev] for lev in  dist_s_sum_len_over_t.columns],
                 linewidth=2,
-                ax = ax1[0])
-        mvhv_p = pd.Series(data=row['p'], index=snap_idx)
-        mvhv_p.plot(
+                ax = ax[0])
+        leg = ax[0].legend(loc='upper right',
+                  ncol=1, fancybox=True, shadow=True, fontsize=9)
+        leg.get_frame().set_alpha(0.5)
+        ax[0].set(ylabel='Overloading in MVAkm')
+
+        dist_voltage_over_t_norm.plot(
                 kind='line',
-                ax = ax1[1])
+                legend=True,
+                color='black',
+                linewidth=1,
+                ax = ax[1])
+        leg = ax[1].legend(loc='upper right',
+                  ncol=1, fancybox=True, shadow=True, fontsize=9)
+        leg.get_frame().set_alpha(0.5)
+        ax[1].set(ylabel='Volt. issues in % of buses')
+
+        dist_gen_dispatch_t.plot(
+                kind='area',
+                legend=True,
+                color=[carrier_colors[name] for name in  dist_gen_dispatch_t.columns],
+                linewidth=.5,
+                alpha=0.7,
+                ax = ax[2])
+        dist_load_t.plot(
+                kind='line',
+                legend=True,
+                color='grey',
+                linewidth=3,
+                alpha=0.9,
+                ax=ax[2])
+        leg = ax[2].legend(loc='upper right',
+                  ncol=3, fancybox=True, shadow=True, fontsize=9)
+        leg.get_frame().set_alpha(0.5)
+        ax[2].set(ylabel='Generation in MW')
+
 
         file_name = 'district_overloading_mv_grid_' + str(mv_grid_id)
-        fig.savefig(dist_plot_dir + file_name + '.pdf')
-        fig.savefig(dist_plot_dir + file_name + '.png')
+        fig.savefig(file_dir + file_name + '.png')
+        add_figure_to_tex(plt_name, file_dir, file_name)
         plt.close(fig)
 
         ## Spatial
         plt_name = "Grid District"
+        file_dir = dist_plot_dir
         fig, ax1 = plt.subplots(1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
         fig.set_size_inches(6,6)
         xmin, ymin, xmax, ymax = grid_buffer.bounds
@@ -927,14 +1202,20 @@ for index, row in mv_trafo_df.iterrows():
         ax1 = add_plot_lines_to_ax(dist_mv_lines_df, ax1, level_colors, 1)
 
         file_name = 'district_' + str(mv_grid_id)
-        fig.savefig(dist_plot_dir + file_name + '.pdf')
-        fig.savefig(dist_plot_dir + file_name + '.png')
+        fig.savefig(file_dir + file_name + '.png')
+        add_figure_to_tex(plt_name, file_dir, file_name)
         plt.close(fig)
 
         ## Scatter
         plt_name = "Correlation of District Overload"
+        file_dir = dist_plot_dir
 
-        plot_df = dist_s_sum_len_over_t_norm
+        plot_df = dist_s_sum_len_over_t
+
+        plot_df = plot_df.loc[(plot_df != 0).all(axis=1)]    # Watchout - this is an important detail!!!
+        if plot_df.empty:
+            continue
+
         fig, ax1 = plt.subplots(1)
         fig.set_size_inches(12,6)
 
@@ -963,32 +1244,34 @@ for index, row in mv_trafo_df.iterrows():
         y = plot_df[lev1].values.reshape(len(plot_df), 1)
         regr.fit(x, y)
         plt.plot(x, regr.predict(x), color='red', linewidth=1)
-        plt.xlabel('Overloaded lines in %, ' + lev0)
-        plt.ylabel('Overloaded lines in %, ' + lev1)
+        plt.xlabel('Overloaded lines in MVAkm, ' + lev0)
+        plt.ylabel('Overloaded lines in MVAkm, ' + lev1)
 
         file_name = 'loading_corr_' + str(mv_grid_id)
-        fig.savefig(dist_plot_dir + file_name + '.pdf')
-        fig.savefig(dist_plot_dir + file_name + '.png')
+        fig.savefig(file_dir + file_name + '.png')
+        add_figure_to_tex(plt_name, file_dir, file_name)
         plt.close(fig)
 
-#TODO Hier weiter...
-#TODO Über Treshhold bei den Korrelationen nachdenken (also, dass erst bei Überlasung auf beiden Ebenen gezählt wird)
-#TODO Gesamtdeutsch unbedingt Generatorein (WInd etc.) Einspeisung plotten.
 
 #TODO Plot mit MV grids anhand Überlastung
-
-#TODO Germany: Plot mit Stunden überlastung pro Leitung
-t = dist_df.dropna()
-dist_df.loc[dist_df['mv_grid'] == 288]
+only_over_dist_df = dist_df.dropna(axis=0, how='any')
 
 
-#### Histogram
-plt_name = "Correlation Histogram"
-fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,4)
+#TODO: ganz neue corr tables machen für MV!!!
+## Save
+title = 'MV grid districts overview'
+file_name = 'mv_grid_districts_info'
+file_dir = dist_dir
+df = only_over_dist_df.set_index('mv_grid').sort_values(by=['r'],ascending=False)
 
-bins = [-.4, -.2, 0, .2, .4, .6, .8, 1, 1.2]
-t.plot.hist(alpha = 0.5, bins=bins, ax=ax, color='grey')
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+render_df = df[['lev0', 'lev1', 'r']].applymap(lambda x: to_str(x))
+fig, ax = render_mpl_table(render_df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=1.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
 
 
 #%% Plot and Output Data Processing
