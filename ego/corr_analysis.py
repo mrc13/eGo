@@ -45,9 +45,11 @@ logger = logging.getLogger(__name__)
 #logger.addHandler(fh)
 
 # General Inputs
-cont_fct_hv = 0.85
+cont_fct_ehv = 0.85
+cont_fct_hv = 0.7
 cont_fct_mv = 1
 over_voltage_mv = 1.05
+
 r_correct_fct = 2       # Because of a mistake in Freileitung oder Kabel.
 result_id = 384
 data_set = '2018-03-25'
@@ -60,6 +62,7 @@ analysis_dir = 'corr_results/' + str(result_id) + '/analysis/' + now + '/'
 if not os.path.exists(analysis_dir):
     os.makedirs(analysis_dir)
 
+## Germany
 ger_dir = analysis_dir + 'ger_analysis/'
 if not os.path.exists(ger_dir):
     os.makedirs(ger_dir)
@@ -72,6 +75,20 @@ ger_corr_dir = ger_dir + 'corr/'
 if not os.path.exists(ger_corr_dir):
     os.makedirs(ger_corr_dir)
 
+## HV
+hv_dir = analysis_dir + 'hv_analysis/'
+if not os.path.exists(hv_dir):
+    os.makedirs(hv_dir)
+
+hv_plot_dir = hv_dir + 'plots/'
+if not os.path.exists(hv_plot_dir):
+    os.makedirs(hv_plot_dir)
+
+hv_corr_dir = hv_dir + 'corr/'
+if not os.path.exists(hv_corr_dir):
+    os.makedirs(hv_corr_dir)
+
+## Dist
 dist_dir = analysis_dir + 'dist_analysis/'
 if not os.path.exists(dist_dir):
     os.makedirs(dist_dir)
@@ -158,6 +175,12 @@ try:
 except:
     logger.warning('No Subst. imported')
 
+# Shapefiles to Dataframes
+
+nuts_shp = gpd.read_file("data/nuts/nuts.shp")
+
+hv_grids_shp = gpd.read_file("data/110kV/kv110_merged_touches.shp")
+
 #%% Further Processing
 # HV Lines
 crs = {'init': 'epsg:4326'}
@@ -178,7 +201,12 @@ line_df['lev'] = line_df.apply(
 
 ## Overload
 line_df['s_over'] = line_df.apply(          ## Relative in 1
-        lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
+        lambda x: [
+                n - cont_fct_hv
+                if x['lev'] == 'HV'
+                else n - cont_fct_ehv
+                for n in x['s_rel']], axis=1)
+
 line_df['s_over_abs'] = line_df.apply(      ## Absoulute in GVAkm
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n>0 else 0 for n in x['s_over']], axis=1)
@@ -186,15 +214,13 @@ line_df['s_over_abs'] = line_df.apply(      ## Absoulute in GVAkm
 line_df['s_over_bol'] = line_df.apply(      ## Boolean
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 
+line_df['anytime_over'] = line_df.apply(      ## True if at any time the line presents an overload
+        lambda x: True if sum(x['s_over_bol']) > 0 else False, axis=1)
+
 line_df['s_over_max'] = line_df.apply(      ## Relative in 1
         lambda x:  max(x['s_over']) if max(x['s_over']) > 0 else 0, axis=1)
 line_df['s_over_dur'] = line_df.apply(      ## Relative in 1
         lambda x:  sum(x['s_over_bol'])/len(snap_idx), axis=1)
-
-# Country links
-cntry_links = [24430, 24431, 24432, 24433, 24410, 24411, 24414, 24415, 24416, 24417, 24418, 24419, 24420, 24421, 24422, 24423, 24424, 24425, 24426, 24427, 24428, 24429, 24434, 24435, 24436, 24437, 24438, 24439, 24440, 24441, 24442, 24443, 24444, 24445, 24446, 24447, 24448, 24449, 24450, 24451, 24452, 24453, 24454, 24455, 24456, 24457, 24458, 24459, 2288, 2323, 2402, 24460, 24461, 24462, 3555, 24463, 3848, 3923, 24464, 24465, 4085, 4198, 4453, 4521, 24466, 24467, 4783, 24468, 4868, 24469, 24470, 24471, 24472, 5300, 5384, 5552, 5520, 24473, 24474, 6229, 6230, 6290, 6440, 6480, 6730, 6792, 6815, 6896, 6991, 7120, 7382, 7395, 7437, 7445, 7464, 7466, 7467, 7535, 7700, 7763, 7775, 7821, 7886, 7932, 7991, 7992, 8029, 8059, 8691, 8718, 9729, 10882, 10930, 10992, 11087, 11169, 11282, 11436, 11445, 11561, 11662, 11942, 12007, 12362, 12436, 12686, 12697, 13022, 13025, 13071, 13064, 13148, 13270, 13308, 13310, 13337, 13361, 13415, 13719, 13848, 13850, 13913, 13921, 13972, 14077, 14139, 14152, 14176, 15047, 15195, 15340, 15907, 16093, 16135, 16140, 16349, 16577, 16844, 17150, 17460, 17756, 17821, 17906, 17954, 18646, 18651, 19627, 19767, 19995, 20031, 20082, 20320, 21279, 21412, 22354, 22390, 22457, 22994, 23162, 23441, 23484, 23623, 23596, 23650, 23655, 23706, 23700, 23701, 23746, 23752, 23774, 23911, 24147, 24316, 24254, 24295]
-cntry_links_df = line_df.loc[cntry_links]
-line_df = line_df.drop(cntry_links, axis=0)
 
 # MV Lines
 crs = {'init': 'epsg:4326'}
@@ -222,6 +248,9 @@ mv_line_df['s_over_abs'] = mv_line_df.apply(      ## Absoulute in GVAkm
 mv_line_df['s_over_bol'] = mv_line_df.apply(      ## Boolean
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
 
+mv_line_df['anytime_over'] = mv_line_df.apply(      ## True if at any time the line presents an overload
+        lambda x: True if sum(x['s_over_bol']) > 0 else False, axis=1)
+
 mv_line_df['s_over_max'] = mv_line_df.apply(      ## Relative in 1
         lambda x:  max(x['s_over']) if max(x['s_over']) > 0 else 0, axis=1)
 mv_line_df['s_over_dur'] = mv_line_df.apply(      ## Relative in 1
@@ -234,15 +263,17 @@ bus_df = gpd.GeoDataFrame(bus_df,
                           geometry=bus_df.geom.map(shapely.wkt.loads))
 bus_df = bus_df.drop(['geom'], axis=1)
 
+bus_df['lev'] = bus_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom']), axis=1)
+
 crs = {'init': 'epsg:4326'}
 mv_bus_df = gpd.GeoDataFrame(mv_bus_df,
                              crs=crs,
                              geometry=mv_bus_df.geom.map(shapely.wkt.loads))
 mv_bus_df = mv_bus_df.drop(['geom'], axis=1)
-#mv_bus_df['mv_grid'] = mv_bus_df.apply(
-#        lambda x: ((mv_line_df.loc[mv_line_df['bus0'] == str(x.index)]['mv_grid'])
-#        | (mv_line_df.loc[mv_line_df['bus1'] == str(x.index)]['mv_grid'])),
-#        axis=1)            # This is very slow
+
+mv_bus_df['lev'] = mv_bus_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom']), axis=1)
 
 # LV Stations
 lv_stations = mv_bus_df.loc[
@@ -299,6 +330,39 @@ gens_df['p'] = gens_df.apply(
 load_df['p'] = load_df.apply(
         lambda x: eval(x['p']), axis=1)
 
+
+#%% Delete country links and buses (Germany as basis)
+    ### This comes here, cause foreign lines, buses and gens are generally excluded
+
+## Country links
+#cntry_links = [24430, 24431, 24432, 24433, 24410, 24411, 24414, 24415, 24416, 24417, 24418, 24419, 24420, 24421, 24422, 24423, 24424, 24425, 24426, 24427, 24428, 24429, 24434, 24435, 24436, 24437, 24438, 24439, 24440, 24441, 24442, 24443, 24444, 24445, 24446, 24447, 24448, 24449, 24450, 24451, 24452, 24453, 24454, 24455, 24456, 24457, 24458, 24459, 2288, 2323, 2402, 24460, 24461, 24462, 3555, 24463, 3848, 3923, 24464, 24465, 4085, 4198, 4453, 4521, 24466, 24467, 4783, 24468, 4868, 24469, 24470, 24471, 24472, 5300, 5384, 5552, 5520, 24473, 24474, 6229, 6230, 6290, 6440, 6480, 6730, 6792, 6815, 6896, 6991, 7120, 7382, 7395, 7437, 7445, 7464, 7466, 7467, 7535, 7700, 7763, 7775, 7821, 7886, 7932, 7991, 7992, 8029, 8059, 8691, 8718, 9729, 10882, 10930, 10992, 11087, 11169, 11282, 11436, 11445, 11561, 11662, 11942, 12007, 12362, 12436, 12686, 12697, 13022, 13025, 13071, 13064, 13148, 13270, 13308, 13310, 13337, 13361, 13415, 13719, 13848, 13850, 13913, 13921, 13972, 14077, 14139, 14152, 14176, 15047, 15195, 15340, 15907, 16093, 16135, 16140, 16349, 16577, 16844, 17150, 17460, 17756, 17821, 17906, 17954, 18646, 18651, 19627, 19767, 19995, 20031, 20082, 20320, 21279, 21412, 22354, 22390, 22457, 22994, 23162, 23441, 23484, 23623, 23596, 23650, 23655, 23706, 23700, 23701, 23746, 23752, 23774, 23911, 24147, 24316, 24254, 24295]
+#
+#line_df['within_ger'] = pd.Series(
+#        {x: x not in cntry_links for x in line_df.index}
+#        )
+
+ger_shp = nuts_shp.loc[nuts_shp['nuts_id'] == 'DE']['geometry'].values[0]
+
+#line_df['within_ger'] = line_df.apply(
+#        lambda x: x['geometry'].within(ger_shp), axis=1)
+
+#line_df = line_df.drop(line_df.loc[line_df['within_ger'] == False].index, axis=0)
+
+bus_df['frgn'] = bus_df.apply(
+        lambda x: not x['geometry'].within(ger_shp), axis=1)
+
+frgn_buses = bus_df.loc[bus_df['frgn'] == True].index # This method is similar to the lines within method. Result should be equal
+line_df['frgn_bus'] = line_df.apply(
+        lambda x: (x['bus0'] in frgn_buses) | (x['bus1'] in frgn_buses),
+                axis=1)
+gens_df['frgn'] = gens_df.apply(
+        lambda x: (x['bus'] in frgn_buses),
+                axis=1)
+
+bus_df = bus_df.drop(bus_df.loc[bus_df['frgn'] == True].index, axis=0)
+line_df = line_df.drop(line_df.loc[line_df['frgn_bus'] == True].index, axis=0)
+gens_df = gens_df.drop(gens_df.loc[gens_df['frgn'] == True].index, axis=0)
+
 #%% Basic grid information Calcs.
 logger.info('Basic grid information')
 
@@ -351,6 +415,7 @@ index =   ['Tot. no. of grids',
            'Tot. calc. length in km',
            'Avg. len. per grid in km',
            'Estim. tot. len. in km',
+           'Estim. tot. overl. in km',
            'Tot. calc. cap in GVAkm',
            'Avg. transm. cap. in GVAkm',
            'Estim. tot. trans cap. in GVAkm',
@@ -361,9 +426,9 @@ mv_grid_info_df.loc['Tot. no. of grids']['MV'] = len(all_hvmv_subst_df)
 
 mv_grid_info_df.loc['No. of calc. grids']['MV'] = len(mv_line_df.mv_grid.unique())
 
-mv_grid_info_df.loc['Perc. of calc. grids']['MV'] = round(
+mv_grid_info_df.loc['Perc. of calc. grids']['MV'] = (
         mv_grid_info_df.loc['No. of calc. grids']['MV']\
-        / mv_grid_info_df.loc['Tot. no. of grids']['MV'] * 100, 2)
+        / mv_grid_info_df.loc['Tot. no. of grids']['MV'] * 100)
 
 mv_grid_info_df.loc['Tot. calc. length in km']['MV'] = round(
         mv_line_df['length'].sum(), 2)
@@ -374,6 +439,12 @@ mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] = round(
 mv_grid_info_df.loc['Estim. tot. len. in km']['MV'] = round( # Länge evtl. besser direkt aus Ding0 berechnen
         mv_grid_info_df.loc['Avg. len. per grid in km']['MV'] *\
         mv_grid_info_df.loc['Tot. no. of grids']['MV'], 2)
+
+mv_grid_info_df.loc[
+        'Estim. tot. overl. in km'
+        ]['MV'] = (
+        sum(mv_line_df.loc[mv_line_df['anytime_over'] == True]['length'])/
+        (mv_grid_info_df.loc['Perc. of calc. grids']['MV'] / 100))
 
 mv_grid_info_df.loc['Tot. calc. cap in GVAkm']['MV'] = round(
         mv_grids_df['Transm. cap. in GVAkm'].sum(), 2)
@@ -408,10 +479,11 @@ file_dir = analysis_dir
 df = mv_grid_info_df
 
 df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-fig, ax = render_mpl_table(df,
+render_df = df.applymap(lambda x: to_str(x))
+fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
-                           first_width=5.0)
+                           first_width=7.0)
 fig.savefig(file_dir + file_name + '.png')
 add_table_to_tex(title, file_dir, file_name)
 
@@ -458,7 +530,8 @@ file_dir = analysis_dir
 df = grid_info_df
 
 df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-fig, ax = render_mpl_table(df,
+render_df = df.applymap(lambda x: to_str(x))
+fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
                            first_width=3.0)
@@ -469,16 +542,27 @@ add_table_to_tex(title, file_dir, file_name)
 # HV/MV Comparison
 columns = ['MV', 'HV', 'EHV220', 'EHV380']
 index =   ['Total. len. in km',
-           'Total. cap. in TVAkm']
+           'Total. overl. in km',
+           'Total. cap. in TVAkm',
+           'X/R ratio']
 hvmv_comparison_df = pd.DataFrame(index=index, columns=columns)
 
 hvmv_comparison_df.loc['Total. len. in km']['MV'] = mv_grid_info_df.loc['Estim. tot. len. in km']['MV']
 for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. len. in km'][col] = grid_info_df.loc['Total. len. in km'][col]
 
+hvmv_comparison_df.loc['Total. overl. in km']['MV'] = mv_grid_info_df.loc[
+        'Estim. tot. overl. in km']['MV']
+for col in grid_info_df.columns:
+    hvmv_comparison_df.loc['Total. overl. in km'][col] = sum(line_df.loc[(line_df['anytime_over'] == True) & (line_df['lev'] == col)]['length'])
+
 hvmv_comparison_df.loc['Total. cap. in TVAkm']['MV'] = round(mv_grid_info_df.loc['Estim. tot. trans cap. in GVAkm']['MV']/1e3, 2)
 for col in grid_info_df.columns:
     hvmv_comparison_df.loc['Total. cap. in TVAkm'][col] = grid_info_df.loc['Total. cap. in TVAkm'][col]
+
+hvmv_comparison_df.loc['X/R ratio']['MV'] = mv_grid_info_df.loc['X/R ratio']['MV']
+for col in grid_info_df.columns:
+    hvmv_comparison_df.loc['X/R ratio'][col] = grid_info_df.loc['X/R ratio'][col]
 
 ## Save
 title = 'Total grid overview'
@@ -487,10 +571,11 @@ file_dir = analysis_dir
 df = hvmv_comparison_df
 
 df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-fig, ax = render_mpl_table(df,
+render_df = df.applymap(lambda x: to_str(x))
+fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
-                           first_width=5.0)
+                           first_width=3.5)
 fig.savefig(file_dir + file_name + '.png')
 add_table_to_tex(title, file_dir, file_name)
 
@@ -509,23 +594,13 @@ file_dir = analysis_dir
 df = gen_info
 
 df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-fig, ax = render_mpl_table(df,
+render_df = df.applymap(lambda x: to_str(x))
+fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
                            first_width=5.0)
 fig.savefig(file_dir + file_name + '.png')
 add_table_to_tex(title, file_dir, file_name)
-
-# TODO: Make line plot
-# Statt dem ganze round, kann ich hier applymap mit to_str anwenden!!!!!!!!!!!!
-#!!!!!
-
-#%% Basic grid information Plots
-
-
-
-
-
 
 
 #%% Electrical Overview
@@ -578,9 +653,8 @@ fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
 
 
-
-
 #%% Corr Germany Calcs
+#Todo: Nuts Abfragen hier noch reinbringen
 
 # Line Overload per voltage level
 ## Total
@@ -948,7 +1022,7 @@ plot_df['color'] = plot_df.apply(
 
 plot_df = plot_df.loc[
                 ((plot_df['lev'] == 'EHV220') | (plot_df['lev'] == 'EHV380'))
-                   ]
+                   ] ## not HV!!!!!!
 
 ax1 = add_weighted_plot_lines_to_ax(
         plot_df,
@@ -960,8 +1034,217 @@ fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
-#TODO Gucken welche Leitungen am häufigsten überlastet werden.
+## Anytime overloaded
+plt_name = "Grid Germany (overloaded anytime)"
+file_dir = ger_plot_dir
 
+fig, ax1 = plt.subplots(1)
+fig.set_size_inches(12,14)
+
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[plot_df['lev'] == 'HV'],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=0.2)
+
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[
+                (plot_df['lev'] == 'EHV220') | (plot_df['lev'] == 'EHV380')
+                ],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=1)
+
+plot_df = line_df.loc[
+        (line_df['anytime_over'] == True)
+        & (line_df['lev'] != 'HV')]
+plot_df.plot(color='red',
+             linewidth=3,
+             ax=ax1)
+
+file_name = 'ger_grid_any_overload'
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
+
+#%% HV Districts
+
+# Processing
+hv_grids_shp = hv_grids_shp.dissolve(by='operator')
+
+hv_grids_shp['center_geom'] = hv_grids_shp['geometry'].apply(
+        lambda x: x.representative_point().coords[:])
+hv_grids_shp['center_geom'] = [
+        coords[0] for coords in hv_grids_shp['center_geom']]
+hv_grids_shp = hv_grids_shp.reset_index()
+
+# District Loop
+for idx0, row0 in hv_grids_shp.iterrows():
+    operator = row0['operator']
+    district_geom = row0['geometry']
+
+## Select all relevant lines, buses and their levels
+    hv_dist_lines_df = line_df.loc[
+            line_df['geometry'].intersects(district_geom)
+            ]
+
+    hv_dist_buses_df = bus_df.loc[
+            bus_df['geometry'].within(district_geom)
+            ]
+
+    hv_dist_gens_df = gens_df.loc[
+            gens_df['bus'].isin(hv_dist_buses_df.index)
+            ]
+
+    hv_dist_load_df = load_df.loc[
+            load_df['bus'].isin(hv_dist_buses_df.index)
+            ]
+
+    hv_dist_levs = []
+    for lev in all_levels: # This for-loop (instead of unique) keeps the sequence right
+        if lev in hv_dist_lines_df['lev'].unique():
+            hv_dist_levs.append(lev)
+
+## Calculate grid capacity and length per level
+    columns = hv_dist_levs
+    index =   ['Cap. in GVAkm', 'Len. in km']
+    hv_dist_cap_df = pd.DataFrame(index=index, columns=columns)
+
+    cap = hv_dist_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
+    for idx, val in cap.iteritems():
+        hv_dist_cap_df.loc['Cap. in GVAkm'][idx] = val
+
+    length = hv_dist_lines_df.groupby('lev')['length'].sum()
+    for idx, val in length.iteritems():
+        hv_dist_cap_df.loc['Len. in km'][idx] = val
+
+## Overload Dataframes
+### Absolute
+    s_sum_len_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=hv_dist_levs)
+    len_over_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=hv_dist_levs)
+
+    for idx1, row1 in hv_dist_lines_df.iterrows():
+        lev = row1['lev']
+        #### cap
+        s_over_series = pd.Series(
+                data=row1['s_over_abs'],
+                index=snap_idx)
+
+        s_sum_len_over_t[lev] = (s_sum_len_over_t[lev]
+                                 + s_over_series)
+        #### length
+        len_over_series = pd.Series(
+                data=row1['s_over_bol'],
+                index=snap_idx) * row1['length']
+
+        len_over_t[lev] = len_over_t[lev] + len_over_series
+
+### Relative
+    s_sum_len_over_t_norm = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=hv_dist_levs)
+    len_over_t_norm = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=hv_dist_levs)
+
+    for col in s_sum_len_over_t_norm.columns:
+        s_sum_len_over_t_norm[col] = (
+                s_sum_len_over_t[col]
+                / hv_dist_cap_df.loc['Cap. in GVAkm'][col]
+                * 100)
+    for col in len_over_t_norm.columns:
+        len_over_t_norm[col] = (
+                len_over_t[col]
+                / hv_dist_cap_df.loc['Len. in km'][col]
+                * 100)
+
+## Generation
+    columns = [
+        car for car in  carrier_colors.keys()
+        if (car in set(hv_dist_gens_df['name']))
+        ]
+    gen_dispatch_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=columns)
+
+    for idx1, row1 in hv_dist_gens_df.iterrows():
+        name = row1['name']
+        p_series = pd.Series(data=row1['p'], index=snap_idx)
+        gen_dispatch_t[name] = gen_dispatch_t[name] + p_series
+
+## Load
+    load_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['load'])
+
+    for idx, row in hv_dist_load_df.iterrows():
+        p_series = pd.Series(data=row['p'], index=snap_idx)
+        load_t['load'] = load_t['load'] + p_series
+
+# Correlation
+    threshed_df = s_sum_len_over_t.loc[
+            (s_sum_len_over_t != 0).all(axis=1)
+            ]
+
+    corr_df = threshed_df.corr()
+
+
+
+###### Hier weitern.... Ploooots us operator names
+
+# Plots
+## HV district overniew
+plt_name = "HV districts"
+file_dir = hv_plot_dir
+
+fig, ax1 = plt.subplots(1)
+fig.set_size_inches(12,14)
+
+plot_df = hv_grids_shp
+
+plot_df.plot(column='operator', ax=ax1, alpha=0.7)
+plot_df.apply(lambda x: ax1.text(
+        x.center_geom[0],
+        x.center_geom[1],
+        x.operator,
+        ha='center'),axis=1);
+
+file_name = 'hv_districts'
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
+
+## HV district overniew
+plt_name = "HV grids"
+file_dir = hv_plot_dir
+
+fig, ax1 = plt.subplots(1)
+fig.set_size_inches(12,14)
+
+plot_df = hv_grids_shp
+
+plot_df.plot(column='operator', ax=ax1, alpha=0.3)
+plot_df = line_df
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[plot_df['lev'] == 'HV'],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=0.2)
+
+file_name = 'hv_grids'
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
 
 #%% Corr District Calcs
 
@@ -1111,7 +1394,7 @@ for index, row in mv_trafo_df.iterrows():
                 ignore_index=True)
 
 
-    # Cleaning out levels without overload for plots
+    # Cleaning out levels with low overload for plots
     make_plots = True
     for column in dist_s_sum_len_over_t_norm.columns:
         max_over = dist_s_sum_len_over_t_norm[column].max()
@@ -1272,6 +1555,11 @@ fig, ax = render_mpl_table(render_df,
                            first_width=1.0)
 fig.savefig(file_dir + file_name + '.png')
 add_table_to_tex(title, file_dir, file_name)
+
+
+
+
+
 
 
 #%% Plot and Output Data Processing

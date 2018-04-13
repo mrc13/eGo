@@ -120,7 +120,6 @@ def add_weighted_plot_lines_to_ax(v_line_df,
 
     return v_ax
 
-
 def render_mpl_table(data, col_width=3.0, row_height=0.625, font_size=12,
                      header_color='grey', row_colors=['#f1f1f2', 'w'], edge_color='w',
                      bbox=[0, 0, 1, 1], header_columns=0, first_width=5.0,
