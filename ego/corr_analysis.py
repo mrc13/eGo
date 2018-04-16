@@ -136,7 +136,7 @@ carrier_colors = {
         "solar" : "yellow",
         "load shedding" : "black"}
 
-
+var_rens = ['wind', 'solar']
 #%% Data import
 try:
     line_df = pd.DataFrame.from_csv(result_dir + 'line_df.csv', encoding='utf-8')
@@ -1080,23 +1080,55 @@ hv_grids_shp['center_geom'] = [
         coords[0] for coords in hv_grids_shp['center_geom']]
 hv_grids_shp = hv_grids_shp.reset_index()
 
+# Overview Dataframe
+columns = [
+        'considered',
+        'drop_reason',
+        'HV', 'EHV',
+        'cap_HV', 'cap_EHV',
+        'len_HV', 'len_EHV',
+        'corr_HV_EHV',
+        'corr_HV_res_load'
+        ]
+
+index = hv_grids_shp['operator']
+hv_dist_df = pd.DataFrame(index=index, columns=columns)
+
+considered_carriers = ['solar', # For correlation
+                           'wind',
+                           'coal',
+                           'lignite',
+                           'uranium']
+
 # District Loop
 for idx0, row0 in hv_grids_shp.iterrows():
     operator = row0['operator']
     district_geom = row0['geometry']
 
+    hv_dist_df.at[operator, 'considered'] = True
+
 ## Select all relevant lines, buses and their levels
     hv_dist_lines_df = line_df.loc[
             line_df['geometry'].intersects(district_geom)
             ]
+    if hv_dist_lines_df.empty:
+        logger.warning('No lines for: ' + operator)
+        continue
 
     hv_dist_buses_df = bus_df.loc[
             bus_df['geometry'].within(district_geom)
             ]
 
+    hv_dist_trafo_df = trafo_df.loc[
+            trafo_df['geometry'].within(district_geom)
+            ]
+
     hv_dist_gens_df = gens_df.loc[
             gens_df['bus'].isin(hv_dist_buses_df.index)
             ]
+    if hv_dist_gens_df.empty:
+        logger.warning('No generators for: ' + operator)
+        continue
 
     hv_dist_load_df = load_df.loc[
             load_df['bus'].isin(hv_dist_buses_df.index)
@@ -1119,6 +1151,9 @@ for idx0, row0 in hv_grids_shp.iterrows():
     length = hv_dist_lines_df.groupby('lev')['length'].sum()
     for idx, val in length.iteritems():
         hv_dist_cap_df.loc['Len. in km'][idx] = val
+
+    if length['HV'] <= 500:
+        continue
 
 ## Overload Dataframes
 ### Absolute
@@ -1171,15 +1206,26 @@ for idx0, row0 in hv_grids_shp.iterrows():
         car for car in  carrier_colors.keys()
         if (car in set(hv_dist_gens_df['name']))
         ]
+
     gen_dispatch_t = pd.DataFrame(
             0.0,
             index=snap_idx,
             columns=columns)
 
+    var_dispatch_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['var_rens'])
+
     for idx1, row1 in hv_dist_gens_df.iterrows():
         name = row1['name']
         p_series = pd.Series(data=row1['p'], index=snap_idx)
         gen_dispatch_t[name] = gen_dispatch_t[name] + p_series
+
+        if name in var_rens:
+            var_dispatch_t['var_rens'] = (
+                    var_dispatch_t['var_rens']
+                    + p_series)
 
 ## Load
     load_t = pd.DataFrame(
@@ -1191,18 +1237,159 @@ for idx0, row0 in hv_grids_shp.iterrows():
         p_series = pd.Series(data=row['p'], index=snap_idx)
         load_t['load'] = load_t['load'] + p_series
 
+    res_load_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['res_load'])
+    res_load_t['res_load'] = load_t['load'] - var_dispatch_t['var_rens']
+
 # Correlation
+    gen_dispatch_t_subset = pd.DataFrame(
+            index=snap_idx)
+
+    for carrier in considered_carriers:
+        if carrier in set(gen_dispatch_t.columns):
+            gen_dispatch_t_subset[carrier] = gen_dispatch_t[carrier]
+
     threshed_df = s_sum_len_over_t.loc[
             (s_sum_len_over_t != 0).all(axis=1)
             ]
 
-    corr_df = threshed_df.corr()
 
+    corr_hv_df = threshed_df.merge(
+            gen_dispatch_t_subset,
+            left_index=True,
+            right_index=True
+            ).merge(
+                    load_t,
+                    left_index=True,
+                    right_index=True
+                    ).merge(
+                        var_dispatch_t,
+                        left_index=True,
+                        right_index=True
+                        ).merge(
+                            res_load_t,
+                            left_index=True,
+                            right_index=True
+                                ).corr(method='pearson')
 
+    corr_hv_df = corr_hv_df.drop(set(gen_dispatch_t_subset.columns), axis=0)
+    corr_hv_df = corr_hv_df.drop('var_rens', axis=0)
+    corr_hv_df = corr_hv_df.drop('load', axis=0)
+    corr_hv_df = corr_hv_df.drop('res_load', axis=0)
 
-###### Hier weitern.... Ploooots us operator names
+## Save
+    title = 'Correlation HV'
+    file_name = 'corr_hv_' + operator
+    file_dir = hv_corr_dir
+    df = corr_hv_df
+
+    df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+    fig, ax = render_corr_table(df,
+                               header_columns=0,
+                               col_width=1.5,
+                               first_width=1.0)
+    fig.savefig(file_dir + file_name + '.png')
+    add_table_to_tex(title, file_dir, file_name)
+    plt.close(fig)
+
 
 # Plots
+    ## Line
+    plt_name = "HV District overloading"
+    file_dir = hv_plot_dir
+
+    fig, ax = plt.subplots(4, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+    fig.set_size_inches(10,8)
+
+    s_sum_len_over_t.plot(
+            kind='line',
+            legend=True,
+            color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+            linewidth=2,
+            ax = ax[0])
+    leg = ax[0].legend(loc='upper right',
+              ncol=1, fancybox=True, shadow=True, fontsize=9)
+    leg.get_frame().set_alpha(0.5)
+    ax[0].set(ylabel='Overl. in GVAkm')
+
+    len_over_t_norm.plot(
+        kind='line',
+        legend=False,
+        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+        linewidth=2,
+        alpha=0.7,
+        ax = ax[1])
+    ax[1].set(ylabel='Overl. len. in %')
+
+    gen_dispatch_t.plot(
+            kind='area',
+            legend=True,
+            color=[carrier_colors[name] for name in  gen_dispatch_t.columns],
+            linewidth=.5,
+            alpha=0.7,
+            ax = ax[2])
+
+    leg = ax[2].legend(loc='upper right',
+              ncol=5, fancybox=True, shadow=True, fontsize=9)
+    leg.get_frame().set_alpha(0.5)
+    ax[2].set(ylabel='Gen. in MW')
+
+    load_t.plot(
+            kind='line',
+            legend=True,
+            color='grey',
+            linewidth=3,
+            alpha=0.9,
+            ax=ax[3])
+    res_load_t.plot(
+            kind='line',
+            legend=True,
+            color='red',
+            linewidth=3,
+            alpha=0.9,
+            ax=ax[3])
+    leg = ax[3].legend(loc='upper right',
+              ncol=1, fancybox=True, shadow=True, fontsize=9)
+    leg.get_frame().set_alpha(0.5)
+    ax[3].set(ylabel='Load in MW')
+
+    file_name = 'hv_district_overloading_' + operator
+    fig.savefig(file_dir + file_name + '.png')
+    add_figure_to_tex(plt_name, file_dir, file_name)
+    plt.close(fig)
+
+    ## Spatial
+    plt_name = "HV Grid District " + operator
+    file_dir = hv_plot_dir
+    fig, ax1 = plt.subplots(1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+    fig.set_size_inches(6,6)
+    xmin, ymin, xmax, ymax = district_geom.bounds
+
+    ax1.set_xlim([xmin,xmax])
+    ax1.set_ylim([ymin,ymax])
+
+    plot_df = hv_dist_lines_df[
+            hv_dist_lines_df['lev'] == 'HV'
+            ]
+    ax1 = add_plot_lines_to_ax(plot_df, ax1, level_colors, 1)
+
+    plot_df = hv_dist_lines_df[
+            (hv_dist_lines_df['lev'] == 'EHV380')
+            | (hv_dist_lines_df['lev'] == 'EHV220')]
+    ax1 = add_plot_lines_to_ax(plot_df, ax1, level_colors, 3)
+
+    hv_grids_shp[hv_grids_shp['operator'] == operator].plot(
+            ax=ax1,
+            alpha = 0.3,
+            color = 'y')
+
+    file_name = 'hv_district_' + operator
+    fig.savefig(file_dir + file_name + '.png')
+    add_figure_to_tex(plt_name, file_dir, file_name)
+    plt.close(fig)
+
 ## HV district overniew
 plt_name = "HV districts"
 file_dir = hv_plot_dir
@@ -1245,6 +1432,10 @@ file_name = 'hv_grids'
 fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
+
+###### Hier weitern.... Corr zusammenfügen für alle HV districts
+
+
 
 #%% Corr District Calcs
 
