@@ -37,7 +37,9 @@ def to_str (v):
     except:
         return v
 
-def get_lev_from_volt (v_voltage): # in kV
+def get_lev_from_volt (
+        v_voltage,
+        v_aggr = False): # in kV
     try:
         v = float(v_voltage)
     except:
@@ -49,21 +51,17 @@ def get_lev_from_volt (v_voltage): # in kV
     elif (v >= 60) & (v <= 110):
         return 'HV'
     elif v == 220:
-        return 'EHV220'
+        if v_aggr==True:
+            return 'EHV'
+        else:
+            return 'EHV220'
     elif v == 380:
-        return 'EHV380'
+        if v_aggr==True:
+            return 'EHV'
+        else:
+            return 'EHV380'
     else: return 'unknown'
 
-def get_volt_from_lev (v_lev):
-    if v_lev == 'MV':
-        return 20. # This is not always true
-    elif v_lev == 'HV':
-        return 110.
-    elif v_lev == 'EHV220':
-        return 220.
-    elif v_lev == 'EHV380':
-        return 380.
-    else: return None
 
 def get_hour_of_year (v_d):
     return ((v_d.timetuple().tm_yday-1) * 24 + v_d.hour + 1)

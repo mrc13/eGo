@@ -23,7 +23,6 @@ from ego.tools.corr_func import (color_for_s_over,
                                  add_plot_lines_to_ax,
                                  add_weighted_plot_lines_to_ax,
                                  get_lev_from_volt,
-                                 get_volt_from_lev,
                                  get_hour_of_year,
                                  add_figure_to_tex,
                                  add_table_to_tex,
@@ -116,9 +115,11 @@ level_colors = {'LV': 'grey',
                 'HV': 'blue',
                 'EHV220': 'green',
                 'EHV380': 'orange',
+                'EHV': 'darkred',
                 'unknown': 'grey'}
 
 all_levels = ['MV', 'HV', 'EHV220', 'EHV380']
+all_aggr_levs = ['MV', 'HV', 'EHV']
 
 carrier_colors = {
         "run_of_river" : "royalblue",
@@ -198,7 +199,15 @@ line_df['s_rel'] = line_df.apply(
         lambda x: eval(x['s_rel']), axis=1)
 line_df['lev'] = line_df.apply(
         lambda x: get_lev_from_volt(x['v_nom']), axis=1)
+line_df['aggr_lev'] = line_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom'], v_aggr=True), axis=1)
 
+## Loading
+line_df['s_len_abs'] = line_df.apply(    # in GVAkm
+        lambda x: [
+                s * x['s_nom_length_GVAkm']
+                for s in x['s_rel']
+                ], axis=1)
 ## Overload
 line_df['s_over'] = line_df.apply(          ## Relative in 1
         lambda x: [
@@ -210,6 +219,15 @@ line_df['s_over'] = line_df.apply(          ## Relative in 1
 line_df['s_over_abs'] = line_df.apply(      ## Absoulute in GVAkm
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n>0 else 0 for n in x['s_over']], axis=1)
+
+line_df['s_under_abs'] = line_df.apply(      ## Absoulute in GVAkm
+        lambda x:  list(
+                pd.Series(
+                        data=x['s_len_abs'],
+                        index=snap_idx)
+                - pd.Series(
+                        data=x['s_over_abs'],
+                        index=snap_idx)), axis=1)
 
 line_df['s_over_bol'] = line_df.apply(      ## Boolean
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
@@ -238,12 +256,30 @@ mv_line_df['s_rel'] = mv_line_df.apply(
         lambda x: eval(x['s_rel']), axis=1)
 mv_line_df['lev'] = mv_line_df.apply(
         lambda x: get_lev_from_volt(x['v_nom']), axis=1)
+mv_line_df['aggr_lev'] = mv_line_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom'], v_aggr=True), axis=1)
+# Loading
+mv_line_df['s_len_abs'] = mv_line_df.apply(    # in GVAkm
+        lambda x: [
+                s * x['s_nom_length_GVAkm']
+                for s in x['s_rel']
+                ], axis=1)
+
 # Overload
 mv_line_df['s_over'] = mv_line_df.apply(          ## Relative in 1
         lambda x: [n - cont_fct_hv for n in x['s_rel']], axis=1)
 mv_line_df['s_over_abs'] = mv_line_df.apply(      ## Absoulute in GVAkm
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n>0 else 0 for n in x['s_over']], axis=1)
+
+mv_line_df['s_under_abs'] = mv_line_df.apply(      ## Absoulute in GVAkm
+    lambda x:  list(
+            pd.Series(
+                    data=x['s_len_abs'],
+                    index=snap_idx)
+            - pd.Series(
+                    data=x['s_over_abs'],
+                    index=snap_idx)), axis=1)
 
 mv_line_df['s_over_bol'] = mv_line_df.apply(      ## Boolean
         lambda x: [True if n > 0 else False for n in x['s_over']], axis=1)
@@ -265,6 +301,8 @@ bus_df = bus_df.drop(['geom'], axis=1)
 
 bus_df['lev'] = bus_df.apply(
         lambda x: get_lev_from_volt(x['v_nom']), axis=1)
+bus_df['aggr_lev'] = bus_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom'], v_aggr=True), axis=1)
 
 crs = {'init': 'epsg:4326'}
 mv_bus_df = gpd.GeoDataFrame(mv_bus_df,
@@ -274,6 +312,8 @@ mv_bus_df = mv_bus_df.drop(['geom'], axis=1)
 
 mv_bus_df['lev'] = mv_bus_df.apply(
         lambda x: get_lev_from_volt(x['v_nom']), axis=1)
+mv_bus_df['lev'] = mv_bus_df.apply(
+        lambda x: get_lev_from_volt(x['v_nom'], v_aggr=True), axis=1)
 
 # LV Stations
 lv_stations = mv_bus_df.loc[
@@ -1080,25 +1120,26 @@ hv_grids_shp['center_geom'] = [
         coords[0] for coords in hv_grids_shp['center_geom']]
 hv_grids_shp = hv_grids_shp.reset_index()
 
-# Overview Dataframe
-columns = [
-        'considered',
-        'drop_reason',
-        'HV', 'EHV',
-        'cap_HV', 'cap_EHV',
-        'len_HV', 'len_EHV',
-        'corr_HV_EHV',
-        'corr_HV_res_load'
-        ]
-
-index = hv_grids_shp['operator']
-hv_dist_df = pd.DataFrame(index=index, columns=columns)
-
 considered_carriers = ['solar', # For correlation
                            'wind',
                            'coal',
                            'lignite',
                            'uranium']
+
+# Overview Dataframe
+columns = [
+        'considered',
+        'drop_reason',
+        'cap_HV', 'cap_EHV',
+        'len_HV', 'len_EHV',
+        'corr_HV_EHV',
+        'corr_HV_res_load'
+        ] #+ ['cap_' + carrier for carrier in considered_carriers]
+
+index = hv_grids_shp['operator']
+hv_dist_df = pd.DataFrame(index=index, columns=columns)
+
+
 
 # District Loop
 for idx0, row0 in hv_grids_shp.iterrows():
@@ -1108,98 +1149,156 @@ for idx0, row0 in hv_grids_shp.iterrows():
     hv_dist_df.at[operator, 'considered'] = True
 
 ## Select all relevant lines, buses and their levels
-    hv_dist_lines_df = line_df.loc[
-            line_df['geometry'].intersects(district_geom)
-            ]
-    if hv_dist_lines_df.empty:
-        logger.warning('No lines for: ' + operator)
-        continue
-
-    hv_dist_buses_df = bus_df.loc[
-            bus_df['geometry'].within(district_geom)
-            ]
 
     hv_dist_trafo_df = trafo_df.loc[
             trafo_df['geometry'].within(district_geom)
+            ]
+    hv_dist_volt = list(set(
+        hv_dist_trafo_df['v_nom0'].tolist()
+        + hv_dist_trafo_df['v_nom1'].tolist()))
+    hv_dist_levs = sorted(list(set([
+            get_lev_from_volt(volt, v_aggr=True)
+            for volt in hv_dist_volt])), reverse=True)
+
+    hv_dist_lines_df = line_df.loc[
+            line_df['aggr_lev'].isin(hv_dist_levs)
+            ]
+    hv_dist_lines_df = hv_dist_lines_df.loc[
+            line_df['geometry'].intersects(district_geom)
+            ]
+    if hv_dist_lines_df.empty:
+        hv_dist_df.at[operator, 'considered'] = False
+        hv_dist_df.at[operator, 'drop_reason'] = 'No lines'
+        continue
+
+    hv_dist_buses_df = bus_df.loc[
+            bus_df['aggr_lev'].isin(hv_dist_levs)
+            ]
+    hv_dist_buses_df = hv_dist_buses_df.loc[
+            bus_df['geometry'].within(district_geom)
             ]
 
     hv_dist_gens_df = gens_df.loc[
             gens_df['bus'].isin(hv_dist_buses_df.index)
             ]
     if hv_dist_gens_df.empty:
-        logger.warning('No generators for: ' + operator)
+        hv_dist_df.at[operator, 'considered'] = False
+        hv_dist_df.at[operator, 'drop_reason'] = 'No gens'
         continue
 
     hv_dist_load_df = load_df.loc[
             load_df['bus'].isin(hv_dist_buses_df.index)
             ]
 
-    hv_dist_levs = []
-    for lev in all_levels: # This for-loop (instead of unique) keeps the sequence right
-        if lev in hv_dist_lines_df['lev'].unique():
-            hv_dist_levs.append(lev)
+    if not 'HV' in hv_dist_levs:
+        hv_dist_df.at[operator, 'considered'] = False
+        hv_dist_df.at[operator, 'drop_reason'] = 'No HV'
+        continue
+## Further data on this grid
+### Generation Capacities
+
+    for car in considered_carriers:
+        if car in set(hv_dist_gens_df['name']):
+            hv_dist_df.at[
+                    operator,
+                    'cap_'+ car
+                    ] = hv_dist_gens_df.loc[
+                            hv_dist_gens_df['name'] == car
+                            ]['p_nom'].sum()
 
 ## Calculate grid capacity and length per level
     columns = hv_dist_levs
     index =   ['Cap. in GVAkm', 'Len. in km']
     hv_dist_cap_df = pd.DataFrame(index=index, columns=columns)
 
-    cap = hv_dist_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
+    cap = hv_dist_lines_df.groupby('aggr_lev')['s_nom_length_GVAkm'].sum()
     for idx, val in cap.iteritems():
         hv_dist_cap_df.loc['Cap. in GVAkm'][idx] = val
+        hv_dist_df.at[operator, 'cap_'+idx] = val
 
-    length = hv_dist_lines_df.groupby('lev')['length'].sum()
+    length = hv_dist_lines_df.groupby('aggr_lev')['length'].sum()
     for idx, val in length.iteritems():
         hv_dist_cap_df.loc['Len. in km'][idx] = val
+        hv_dist_df.at[operator, 'len_'+idx] = val
 
     if length['HV'] <= 500:
+        hv_dist_df.at[operator, 'considered'] = False
+        hv_dist_df.at[operator, 'drop_reason'] = 'short HV grid'
         continue
 
 ## Overload Dataframes
 ### Absolute
+    s_sum_len_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=hv_dist_levs)
     s_sum_len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=hv_dist_levs)
-    len_over_t = pd.DataFrame(0.0,
+    s_sum_len_under_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=hv_dist_levs)
 
+#    len_over_t = pd.DataFrame(0.0,
+#                                   index=snap_idx,
+#                                   columns=hv_dist_levs)
+
     for idx1, row1 in hv_dist_lines_df.iterrows():
-        lev = row1['lev']
-        #### cap
+        lev = row1['aggr_lev']
+
+        #### s_len
+        s_len_series = pd.Series(
+                data=row1['s_len_abs'],
+                index=snap_idx)
+
+        s_sum_len_t[lev] = (s_sum_len_t[lev]
+                                 + s_len_series)
+        #### s_over
         s_over_series = pd.Series(
                 data=row1['s_over_abs'],
                 index=snap_idx)
 
         s_sum_len_over_t[lev] = (s_sum_len_over_t[lev]
                                  + s_over_series)
-        #### length
-        len_over_series = pd.Series(
-                data=row1['s_over_bol'],
-                index=snap_idx) * row1['length']
 
-        len_over_t[lev] = len_over_t[lev] + len_over_series
+        #### s_under
+        s_under_series = pd.Series(
+                data=row1['s_under_abs'],
+                index=snap_idx)
+
+        s_sum_len_under_t[lev] = (s_sum_len_under_t[lev]
+                                 + s_under_series)
+#        #### length
+#        len_over_series = pd.Series(
+#                data=row1['s_over_bol'],
+#                index=snap_idx) * row1['length']
+
+#        len_over_t[lev] = len_over_t[lev] + len_over_series
+
+    if max(s_sum_len_over_t['HV']) <= 10:
+        hv_dist_df.at[operator, 'considered'] = False
+        hv_dist_df.at[operator, 'drop_reason'] = 'No HV overl.'
+        continue
 
 ### Relative
-    s_sum_len_over_t_norm = pd.DataFrame(
-            0.0,
-            index=snap_idx,
-            columns=hv_dist_levs)
-    len_over_t_norm = pd.DataFrame(
-            0.0,
-            index=snap_idx,
-            columns=hv_dist_levs)
+#    s_sum_len_over_t_norm = pd.DataFrame(
+#            0.0,
+#            index=snap_idx,
+#            columns=hv_dist_levs)
+#    len_over_t_norm = pd.DataFrame(
+#            0.0,
+#            index=snap_idx,
+#            columns=hv_dist_levs)
 
-    for col in s_sum_len_over_t_norm.columns:
-        s_sum_len_over_t_norm[col] = (
-                s_sum_len_over_t[col]
-                / hv_dist_cap_df.loc['Cap. in GVAkm'][col]
-                * 100)
-    for col in len_over_t_norm.columns:
-        len_over_t_norm[col] = (
-                len_over_t[col]
-                / hv_dist_cap_df.loc['Len. in km'][col]
-                * 100)
+#    for col in s_sum_len_over_t_norm.columns:
+#        s_sum_len_over_t_norm[col] = (
+#                s_sum_len_over_t[col]
+#                / hv_dist_cap_df.loc['Cap. in GVAkm'][col]
+#                * 100)
+#    for col in len_over_t_norm.columns:
+#        len_over_t_norm[col] = (
+#                len_over_t[col]
+#                / hv_dist_cap_df.loc['Len. in km'][col]
+#                * 100)
 
 ## Generation
     columns = [
@@ -1251,12 +1350,12 @@ for idx0, row0 in hv_grids_shp.iterrows():
         if carrier in set(gen_dispatch_t.columns):
             gen_dispatch_t_subset[carrier] = gen_dispatch_t[carrier]
 
-    threshed_df = s_sum_len_over_t.loc[
-            (s_sum_len_over_t != 0).all(axis=1)
-            ]
+#    threshed_df = s_sum_len_over_t#.loc[
+#           # (s_sum_len_over_t != 0).all(axis=1)
+#           # ]
 
 
-    corr_hv_df = threshed_df.merge(
+    corr_hv_df = s_sum_len_t.merge(
             gen_dispatch_t_subset,
             left_index=True,
             right_index=True
@@ -1279,6 +1378,17 @@ for idx0, row0 in hv_grids_shp.iterrows():
     corr_hv_df = corr_hv_df.drop('load', axis=0)
     corr_hv_df = corr_hv_df.drop('res_load', axis=0)
 
+    if 'EHV' in hv_dist_levs:
+        hv_dist_df.at[
+                operator,
+                'corr_HV_EHV'
+                ] = corr_hv_df.loc['HV']['EHV']
+
+    hv_dist_df.at[
+            operator,
+            'corr_HV_res_load'
+            ] = corr_hv_df.loc['HV']['res_load']
+
 ## Save
     title = 'Correlation HV'
     file_name = 'corr_hv_' + operator
@@ -1300,28 +1410,57 @@ for idx0, row0 in hv_grids_shp.iterrows():
     plt_name = "HV District overloading"
     file_dir = hv_plot_dir
 
-    fig, ax = plt.subplots(4, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-    fig.set_size_inches(10,8)
+    fig, ax = plt.subplots(3, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+    fig.set_size_inches(10,6)
 
-    s_sum_len_over_t.plot(
-            kind='line',
+    y_max = sum(s_sum_len_t.max())
+    for lev in list(s_sum_len_t.max().sort_values(ascending=False).index):
+
+        s_sum_len_under_t_lev = s_sum_len_under_t[lev].rename('normal ' + lev)
+        s_sum_len_over_t_lev = s_sum_len_over_t[lev].rename('overloaded ' + lev)
+
+
+        plot_df = s_sum_len_under_t_lev.to_frame().join(s_sum_len_over_t_lev)
+        plot_df.plot(
+            kind='area',
             legend=True,
-            color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
-            linewidth=2,
+            color=[level_colors[lev], 'orange'],
+            linewidth=0.2,
             ax = ax[0])
+
+#    s_sum_len_over_t.plot(
+#            kind='line',
+#            legend=True,
+#            color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+#            linewidth=0.5,
+#            alpha=0.2,
+#            ax = ax[0])
+#    s_sum_len_under_t.plot(
+#            kind='line',
+#            legend=True,
+#            color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+#            linewidth=2,
+#            ax = ax[0])
+#    s_sum_len_t.plot(
+#            kind='line',
+#            legend=True,
+#            color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+#            linewidth=3,
+#            ax = ax[0])
+    ax[0].set_ylim([0,y_max])
     leg = ax[0].legend(loc='upper right',
               ncol=1, fancybox=True, shadow=True, fontsize=9)
     leg.get_frame().set_alpha(0.5)
-    ax[0].set(ylabel='Overl. in GVAkm')
+    ax[0].set(ylabel='Loading. in GVAkm')
 
-    len_over_t_norm.plot(
-        kind='line',
-        legend=False,
-        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
-        linewidth=2,
-        alpha=0.7,
-        ax = ax[1])
-    ax[1].set(ylabel='Overl. len. in %')
+#    len_over_t_norm.plot(
+#        kind='line',
+#        legend=False,
+#        color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
+#        linewidth=2,
+#        alpha=0.7,
+#        ax = ax[1])
+#    ax[1].set(ylabel='Overl. len. in %')
 
     gen_dispatch_t.plot(
             kind='area',
@@ -1329,12 +1468,12 @@ for idx0, row0 in hv_grids_shp.iterrows():
             color=[carrier_colors[name] for name in  gen_dispatch_t.columns],
             linewidth=.5,
             alpha=0.7,
-            ax = ax[2])
+            ax = ax[1])
 
-    leg = ax[2].legend(loc='upper right',
+    leg = ax[1].legend(loc='upper right',
               ncol=5, fancybox=True, shadow=True, fontsize=9)
     leg.get_frame().set_alpha(0.5)
-    ax[2].set(ylabel='Gen. in MW')
+    ax[1].set(ylabel='Gen. in MW')
 
     load_t.plot(
             kind='line',
@@ -1342,18 +1481,18 @@ for idx0, row0 in hv_grids_shp.iterrows():
             color='grey',
             linewidth=3,
             alpha=0.9,
-            ax=ax[3])
+            ax=ax[2])
     res_load_t.plot(
             kind='line',
             legend=True,
             color='red',
             linewidth=3,
             alpha=0.9,
-            ax=ax[3])
-    leg = ax[3].legend(loc='upper right',
+            ax=ax[2])
+    leg = ax[2].legend(loc='upper right',
               ncol=1, fancybox=True, shadow=True, fontsize=9)
     leg.get_frame().set_alpha(0.5)
-    ax[3].set(ylabel='Load in MW')
+    ax[2].set(ylabel='Load in MW')
 
     file_name = 'hv_district_overloading_' + operator
     fig.savefig(file_dir + file_name + '.png')
@@ -1371,24 +1510,46 @@ for idx0, row0 in hv_grids_shp.iterrows():
     ax1.set_ylim([ymin,ymax])
 
     plot_df = hv_dist_lines_df[
-            hv_dist_lines_df['lev'] == 'HV'
+            hv_dist_lines_df['aggr_lev'] == 'HV'
             ]
     ax1 = add_plot_lines_to_ax(plot_df, ax1, level_colors, 1)
 
     plot_df = hv_dist_lines_df[
-            (hv_dist_lines_df['lev'] == 'EHV380')
-            | (hv_dist_lines_df['lev'] == 'EHV220')]
+            hv_dist_lines_df['aggr_lev'] == 'EHV']
     ax1 = add_plot_lines_to_ax(plot_df, ax1, level_colors, 3)
 
+    hv_dist_trafo_df.plot(ax=ax1,
+                   alpha = 1,
+                   color = 'r',
+                   marker='o',
+                   markersize=300,
+                   facecolors='none'
+                   )
     hv_grids_shp[hv_grids_shp['operator'] == operator].plot(
             ax=ax1,
             alpha = 0.3,
             color = 'y')
+#    center_geom = hv_grids_shp.loc[
+#            hv_grids_shp['operator'] == operator
+#            ]['center_geom'].values[0]
+#    type(center_geom)
+#    ax1.text(
+#        center_geom[0],
+#        center_geom[1],
+#        operator,
+#        ha='center')
 
     file_name = 'hv_district_' + operator
     fig.savefig(file_dir + file_name + '.png')
     add_figure_to_tex(plt_name, file_dir, file_name)
     plt.close(fig)
+
+# Analyse all HV grids
+
+
+
+
+
 
 ## HV district overniew
 plt_name = "HV districts"
@@ -1397,7 +1558,12 @@ file_dir = hv_plot_dir
 fig, ax1 = plt.subplots(1)
 fig.set_size_inches(12,14)
 
-plot_df = hv_grids_shp
+cons_grids = hv_dist_df.loc[
+        hv_dist_df['considered']==True
+        ].index
+plot_df = hv_grids_shp#.loc[
+#        hv_grids_shp['operator'].isin(cons_grids)
+#        ]
 
 plot_df.plot(column='operator', ax=ax1, alpha=0.7)
 plot_df.apply(lambda x: ax1.text(
@@ -1418,15 +1584,32 @@ file_dir = hv_plot_dir
 fig, ax1 = plt.subplots(1)
 fig.set_size_inches(12,14)
 
-plot_df = hv_grids_shp
+cons_grids = hv_dist_df.loc[
+        hv_dist_df['considered']==True
+        ].index
+plot_df = hv_grids_shp.loc[
+        hv_grids_shp['operator'].isin(cons_grids)
+        ]
 
-plot_df.plot(column='operator', ax=ax1, alpha=0.3)
+plot_df.plot(column='operator', ax=ax1, alpha=0.4)
+plot_df.apply(lambda x: ax1.text(
+        x.center_geom[0],
+        x.center_geom[1],
+        x.operator,
+        ha='center'),axis=1);
+
 plot_df = line_df
 ax1 = add_plot_lines_to_ax(
         plot_df.loc[plot_df['lev'] == 'HV'],
         v_ax=ax1,
         v_level_colors=level_colors,
         v_size=0.2)
+
+ax1 = add_plot_lines_to_ax(
+        plot_df.loc[plot_df['aggr_lev'] == 'EHV'],
+        v_ax=ax1,
+        v_level_colors=level_colors,
+        v_size=0.4)
 
 file_name = 'hv_grids'
 fig.savefig(file_dir + file_name + '.png')
