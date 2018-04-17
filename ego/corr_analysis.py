@@ -23,7 +23,6 @@ from ego.tools.corr_func import (color_for_s_over,
                                  add_plot_lines_to_ax,
                                  add_weighted_plot_lines_to_ax,
                                  get_lev_from_volt,
-                                 get_hour_of_year,
                                  add_figure_to_tex,
                                  add_table_to_tex,
                                  render_mpl_table,
@@ -1127,19 +1126,10 @@ considered_carriers = ['solar', # For correlation
                            'uranium']
 
 # Overview Dataframe
-columns = [
-        'considered',
-        'drop_reason',
-        'cap_HV', 'cap_EHV',
-        'len_HV', 'len_EHV',
-        'corr_HV_EHV',
-        'corr_HV_res_load'
-        ] #+ ['cap_' + carrier for carrier in considered_carriers]
-
 index = hv_grids_shp['operator']
-hv_dist_df = pd.DataFrame(index=index, columns=columns)
-
-
+hv_dist_df = pd.DataFrame(index=index)
+hv_dist_corr_tot_df = pd.DataFrame(index=index)
+hv_dist_corr_over_df = pd.DataFrame(index=index)
 
 # District Loop
 for idx0, row0 in hv_grids_shp.iterrows():
@@ -1170,6 +1160,9 @@ for idx0, row0 in hv_grids_shp.iterrows():
         hv_dist_df.at[operator, 'considered'] = False
         hv_dist_df.at[operator, 'drop_reason'] = 'No lines'
         continue
+
+    for lev in hv_dist_levs:
+        hv_dist_df.at[operator, lev] = True
 
     hv_dist_buses_df = bus_df.loc[
             bus_df['aggr_lev'].isin(hv_dist_levs)
@@ -1274,10 +1267,10 @@ for idx0, row0 in hv_grids_shp.iterrows():
 
 #        len_over_t[lev] = len_over_t[lev] + len_over_series
 
-    if max(s_sum_len_over_t['HV']) <= 10:
-        hv_dist_df.at[operator, 'considered'] = False
-        hv_dist_df.at[operator, 'drop_reason'] = 'No HV overl.'
-        continue
+#    if max(s_sum_len_over_t['HV']) <= 10:
+#        hv_dist_df.at[operator, 'considered'] = False
+#        hv_dist_df.at[operator, 'drop_reason'] = 'No HV overl.'
+#        continue
 
 ### Relative
 #    s_sum_len_over_t_norm = pd.DataFrame(
@@ -1342,6 +1335,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
             columns=['res_load'])
     res_load_t['res_load'] = load_t['load'] - var_dispatch_t['var_rens']
 
+    hv_dist_df.at[operator, 'mean_res_l.'] = res_load_t.mean()
 # Correlation
     gen_dispatch_t_subset = pd.DataFrame(
             index=snap_idx)
@@ -1350,11 +1344,48 @@ for idx0, row0 in hv_grids_shp.iterrows():
         if carrier in set(gen_dispatch_t.columns):
             gen_dispatch_t_subset[carrier] = gen_dispatch_t[carrier]
 
-#    threshed_df = s_sum_len_over_t#.loc[
-#           # (s_sum_len_over_t != 0).all(axis=1)
-#           # ]
+    s_sum_len_over_t_thresh = s_sum_len_over_t.loc[
+            (s_sum_len_over_t != 0).any(axis=1)
+            ]
+## Overloading and Loading correlation
+    if hv_dist_df.loc[operator, 'EHV'] == True:
+### Overload  ing
+        s_sum_len_over_corr = s_sum_len_over_t_thresh.corr(
+                method='pearson')
+        hv_dist_corr_over_df.at[
+                operator,
+                'HV_EHV'] = s_sum_len_over_corr.loc['HV']['EHV']
+### Loading
+        s_sum_len_corr = s_sum_len_t.corr(
+                method='pearson')
+        hv_dist_corr_tot_df.at[
+                operator,
+                'HV_EHV'] = s_sum_len_corr.loc['HV']['EHV']
+## Line Overloading and Loading with everything else
+### Overloading
+    corr_hv_over_df = s_sum_len_over_t.merge(
+            gen_dispatch_t_subset,
+            left_index=True,
+            right_index=True
+            ).merge(
+                    load_t,
+                    left_index=True,
+                    right_index=True
+                    ).merge(
+                        var_dispatch_t,
+                        left_index=True,
+                        right_index=True
+                        ).merge(
+                            res_load_t,
+                            left_index=True,
+                            right_index=True
+                                )
 
+    corr_hv_over_thresh_df = corr_hv_over_df.loc[
+            (corr_hv_over_df != 0).any(axis=1)]
 
+    hv_over_corr = corr_hv_over_thresh_df.corr(method='pearson')
+### Loading
     corr_hv_df = s_sum_len_t.merge(
             gen_dispatch_t_subset,
             left_index=True,
@@ -1371,38 +1402,54 @@ for idx0, row0 in hv_grids_shp.iterrows():
                             res_load_t,
                             left_index=True,
                             right_index=True
-                                ).corr(method='pearson')
+                                )
 
-    corr_hv_df = corr_hv_df.drop(set(gen_dispatch_t_subset.columns), axis=0)
-    corr_hv_df = corr_hv_df.drop('var_rens', axis=0)
-    corr_hv_df = corr_hv_df.drop('load', axis=0)
-    corr_hv_df = corr_hv_df.drop('res_load', axis=0)
+    corr_hv_thresh_df = corr_hv_df.loc[
+            (corr_hv_df != 0).any(axis=1)]
 
-    if 'EHV' in hv_dist_levs:
-        hv_dist_df.at[
-                operator,
-                'corr_HV_EHV'
-                ] = corr_hv_df.loc['HV']['EHV']
+    hv_corr = corr_hv_thresh_df.corr(method='pearson')
 
-    hv_dist_df.at[
-            operator,
-            'corr_HV_res_load'
-            ] = corr_hv_df.loc['HV']['res_load']
+    for col in list(gen_dispatch_t_subset.columns) + ['load', 'var_rens', 'res_load']:
+        for lev in hv_dist_levs:
+            hv_dist_corr_over_df.at[
+                    operator,
+                    lev + '_' + col
+                    ] = hv_over_corr.loc[lev][col]
+            hv_dist_corr_tot_df.at[
+                    operator,
+                    lev + '_' + col
+                    ] = hv_corr.loc[lev][col]
 
-## Save
-    title = 'Correlation HV'
-    file_name = 'corr_hv_' + operator
-    file_dir = hv_corr_dir
-    df = corr_hv_df
-
-    df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-    fig, ax = render_corr_table(df,
-                               header_columns=0,
-                               col_width=1.5,
-                               first_width=1.0)
-    fig.savefig(file_dir + file_name + '.png')
-    add_table_to_tex(title, file_dir, file_name)
-    plt.close(fig)
+#    corr_hv_df = corr_hv_df.drop(set(gen_dispatch_t_subset.columns), axis=0)
+#    corr_hv_df = corr_hv_df.drop('var_rens', axis=0)
+#    corr_hv_df = corr_hv_df.drop('load', axis=0)
+#    corr_hv_df = corr_hv_df.drop('res_load', axis=0)
+#
+#    if 'EHV' in hv_dist_levs:
+#        hv_dist_df.at[
+#                operator,
+#                'corr_HV_EHV'
+#                ] = corr_hv_df.loc['HV']['EHV']
+#
+#    hv_dist_df.at[
+#            operator,
+#            'corr_HV_res_load'
+#            ] = corr_hv_df.loc['HV']['res_load']
+#
+### Save
+#    title = 'Correlation HV'
+#    file_name = 'corr_hv_' + operator
+#    file_dir = hv_corr_dir
+#    df = corr_hv_df
+#
+#    df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+#    fig, ax = render_corr_table(df,
+#                               header_columns=0,
+#                               col_width=1.5,
+#                               first_width=1.0)
+#    fig.savefig(file_dir + file_name + '.png')
+#    add_table_to_tex(title, file_dir, file_name)
+#    plt.close(fig)
 
 
 # Plots
@@ -1544,12 +1591,6 @@ for idx0, row0 in hv_grids_shp.iterrows():
     add_figure_to_tex(plt_name, file_dir, file_name)
     plt.close(fig)
 
-# Analyse all HV grids
-
-
-
-
-
 
 ## HV district overniew
 plt_name = "HV districts"
@@ -1616,10 +1657,97 @@ fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
-###### Hier weitern.... Corr zusammenfügen für alle HV districts
+## Save
+title = 'Correlation HV Overloading'
+file_name = 'corr_hv_over'
+file_dir = hv_corr_dir
+df = hv_dist_corr_over_df.loc[hv_dist_df['considered']]
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=2.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
+
+title = 'Correlation HV Loading'
+file_name = 'corr_hv_loading'
+file_dir = hv_corr_dir
+df = hv_dist_corr_tot_df.loc[hv_dist_df['considered']]
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=2.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
+
+# Second level correlation
+## Loading
+considered_columns = [
+        'cap_solar',
+        'cap_wind',
+        'cap_coal',
+        'cap_lignite',
+        'mean_res_l.',
+        'len_HV',
+        'len_EHV']
+second_corr_hv = hv_dist_df[
+        considered_columns
+        ][hv_dist_df['considered']].merge(
+            hv_dist_corr_tot_df,
+            left_index=True,
+            right_index=True
+            ).corr(method='pearson')
+
+second_corr_hv = second_corr_hv.drop(hv_dist_corr_tot_df.columns, axis=0)
+second_corr_hv = second_corr_hv.drop(considered_columns, axis=1)
 
 
+title = 'Second Level HV Correlation (Loading'
+file_name = 'second_corr_hv_loading'
+file_dir = hv_corr_dir
+df = second_corr_hv
 
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=2.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
+
+## Overloading
+second_corr_hv = hv_dist_df[
+        considered_columns
+        ][hv_dist_df['considered']].merge(
+            hv_dist_corr_over_df,
+            left_index=True,
+            right_index=True
+            ).corr(method='pearson')
+
+second_corr_hv = second_corr_hv.drop(hv_dist_corr_tot_df.columns, axis=0)
+second_corr_hv = second_corr_hv.drop(considered_columns, axis=1)
+
+
+title = 'Second Level HV Correlation (Overloading)'
+file_name = 'second_corr_hv_overloading'
+file_dir = hv_corr_dir
+df = second_corr_hv
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=2.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
 #%% Corr District Calcs
 
 columns = [['mv_grid',
