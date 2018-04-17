@@ -1138,8 +1138,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
 
     hv_dist_df.at[operator, 'considered'] = True
 
-## Select all relevant lines, buses and their levels
-
+## Voltage in this district
     hv_dist_trafo_df = trafo_df.loc[
             trafo_df['geometry'].within(district_geom)
             ]
@@ -1149,6 +1148,8 @@ for idx0, row0 in hv_grids_shp.iterrows():
     hv_dist_levs = sorted(list(set([
             get_lev_from_volt(volt, v_aggr=True)
             for volt in hv_dist_volt])), reverse=True)
+
+## Select all relevant lines, buses and their levels
 
     hv_dist_lines_df = line_df.loc[
             line_df['aggr_lev'].isin(hv_dist_levs)
@@ -1187,6 +1188,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
         hv_dist_df.at[operator, 'considered'] = False
         hv_dist_df.at[operator, 'drop_reason'] = 'No HV'
         continue
+
 ## Further data on this grid
 ### Generation Capacities
 
@@ -1219,8 +1221,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
         hv_dist_df.at[operator, 'drop_reason'] = 'short HV grid'
         continue
 
-## Overload Dataframes
-### Absolute
+## Loading Dataframes
     s_sum_len_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=hv_dist_levs)
@@ -1230,10 +1231,6 @@ for idx0, row0 in hv_grids_shp.iterrows():
     s_sum_len_under_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=hv_dist_levs)
-
-#    len_over_t = pd.DataFrame(0.0,
-#                                   index=snap_idx,
-#                                   columns=hv_dist_levs)
 
     for idx1, row1 in hv_dist_lines_df.iterrows():
         lev = row1['aggr_lev']
@@ -1293,7 +1290,8 @@ for idx0, row0 in hv_grids_shp.iterrows():
 #                / hv_dist_cap_df.loc['Len. in km'][col]
 #                * 100)
 
-## Generation
+## Generation Dataframes
+
     columns = [
         car for car in  carrier_colors.keys()
         if (car in set(hv_dist_gens_df['name']))
@@ -1336,6 +1334,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
     res_load_t['res_load'] = load_t['load'] - var_dispatch_t['var_rens']
 
     hv_dist_df.at[operator, 'mean_res_l.'] = res_load_t['res_load'].mean()
+
 # Correlation
     gen_dispatch_t_subset = pd.DataFrame(
             index=snap_idx)
@@ -1344,12 +1343,13 @@ for idx0, row0 in hv_grids_shp.iterrows():
         if carrier in set(gen_dispatch_t.columns):
             gen_dispatch_t_subset[carrier] = gen_dispatch_t[carrier]
 
+## Overloading and Loading correlation
+### Overloading
     s_sum_len_over_t_thresh = s_sum_len_over_t.loc[
             (s_sum_len_over_t != 0).any(axis=1)
             ]
-## Overloading and Loading correlation
+
     if hv_dist_df.loc[operator, 'EHV'] == True:
-### Overload  ing
         s_sum_len_over_corr = s_sum_len_over_t_thresh.corr(
                 method='pearson')
         hv_dist_corr_over_df.at[
@@ -1361,6 +1361,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
         hv_dist_corr_tot_df.at[
                 operator,
                 'HV_EHV'] = s_sum_len_corr.loc['HV']['EHV']
+
 ## Line Overloading and Loading with everything else
 ### Overloading
     corr_hv_over_df = s_sum_len_over_t.merge(
@@ -1409,6 +1410,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
 
     hv_corr = corr_hv_thresh_df.corr(method='pearson')
 
+### Writing
     for col in list(gen_dispatch_t_subset.columns) + ['load', 'var_rens', 'res_load']:
         for lev in hv_dist_levs:
             hv_dist_corr_over_df.at[
@@ -1419,37 +1421,6 @@ for idx0, row0 in hv_grids_shp.iterrows():
                     operator,
                     lev + '_' + col
                     ] = hv_corr.loc[lev][col]
-
-#    corr_hv_df = corr_hv_df.drop(set(gen_dispatch_t_subset.columns), axis=0)
-#    corr_hv_df = corr_hv_df.drop('var_rens', axis=0)
-#    corr_hv_df = corr_hv_df.drop('load', axis=0)
-#    corr_hv_df = corr_hv_df.drop('res_load', axis=0)
-#
-#    if 'EHV' in hv_dist_levs:
-#        hv_dist_df.at[
-#                operator,
-#                'corr_HV_EHV'
-#                ] = corr_hv_df.loc['HV']['EHV']
-#
-#    hv_dist_df.at[
-#            operator,
-#            'corr_HV_res_load'
-#            ] = corr_hv_df.loc['HV']['res_load']
-#
-### Save
-#    title = 'Correlation HV'
-#    file_name = 'corr_hv_' + operator
-#    file_dir = hv_corr_dir
-#    df = corr_hv_df
-#
-#    df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-#    fig, ax = render_corr_table(df,
-#                               header_columns=0,
-#                               col_width=1.5,
-#                               first_width=1.0)
-#    fig.savefig(file_dir + file_name + '.png')
-#    add_table_to_tex(title, file_dir, file_name)
-#    plt.close(fig)
 
 
 # Plots
@@ -1612,7 +1583,7 @@ plot_df.apply(lambda x: ax1.text(
         x.center_geom[1],
         x.operator,
         ha='center'),axis=1);
-
+### Save
 file_name = 'hv_districts'
 fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
@@ -1651,13 +1622,13 @@ ax1 = add_plot_lines_to_ax(
         v_ax=ax1,
         v_level_colors=level_colors,
         v_size=0.4)
-
+### Save
 file_name = 'hv_grids'
 fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
-## Save
+# Correlation Tables
 title = 'Correlation HV Overloading'
 file_name = 'corr_hv_over'
 file_dir = hv_corr_dir
@@ -1750,319 +1721,595 @@ add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 #%% Corr District Calcs
 
-columns = [['mv_grid',
-            'lev0',
-            'lev1',
-            'r',
-            'lev0_rel_overl_max',
-            'lev1_rel_overl_max',
-            'cap0',
-            'cap1']]
-dist_df = pd.DataFrame(columns=columns)
-
+# Processing
 mv_trafo_df = mv_trafo_df.set_geometry('grid_buffer')
+
+considered_carriers = [ # For correlation
+        'solar',
+        'wind'
+        ]
+
+# Overview Dataframe
+index = mv_trafo_df['subst_id']
+mv_dist_df = pd.DataFrame(index=index)
+mv_dist_corr_tot_df = pd.DataFrame(index=index)
+mv_dist_corr_over_df = pd.DataFrame(index=index)
+
 # Loop through HV/MV Trafos
-for index, row in mv_trafo_df.iterrows():
+for idx0, row0 in mv_trafo_df.iterrows():
 
-    mv_grid_id = row['subst_id']
-    grid_buffer = row['grid_buffer']
-    bus1 = row['bus1']
+    mv_grid_id = row0['subst_id']
+    district_geom = row0['grid_buffer']
 
-    dist_volts = []
+    bus1 = row0['bus1']
+
+    mv_dist_df.at[mv_grid_id, 'considered'] = True
+
+    if mv_grid_id > 100:# length['MV'] <= 100:
+        mv_dist_df.at[mv_grid_id, 'considered'] = False
+        mv_dist_df.at[mv_grid_id, 'drop_reason'] = 'short MV grid'
+        continue
+
+## Voltage in this district
+    mv_dist_volts = []
 
     ## HV/MV Trafo voltages
-    dist_volts.append(row['v_nom0'])
-    dist_volts.append(row['v_nom1'])
+    mv_dist_volts.append(row0['v_nom0'])
+    mv_dist_volts.append(row0['v_nom1'])
 
-    dist_levs = [get_lev_from_volt(volt) for volt in dist_volts]
+    mv_dist_levs = [get_lev_from_volt(volt) for volt in mv_dist_volts]
 
-    # Select all relevant lines
-    ## MV
-    dist_mv_lines_df = mv_line_df.loc[mv_line_df['mv_grid'] == mv_grid_id]
+    mv_dist_df.at[mv_grid_id, 'MV'] = True
+    mv_dist_df.at[mv_grid_id, 'upper'] = mv_dist_levs[1]
 
-    ## HV
-    dist_hv_lines_df = line_df.loc[
-            [x in dist_volts for x in line_df['v_nom']]
+## Select all relevant lines, buses and their levels
+
+    ### MV lines
+    mv_dist_mv_lines_df = mv_line_df.loc[
+            mv_line_df['mv_grid'] == mv_grid_id
             ]
 
-    dist_hv_lines_df = dist_hv_lines_df.loc[
-            dist_hv_lines_df['geometry'].intersects(grid_buffer)
+    ### HV lines
+    mv_dist_hv_lines_df = line_df.loc[
+            line_df['lev'].isin(mv_dist_levs)
             ]
 
-    # Select all relevant LV stations
-    dist_lv_stations = lv_stations.loc[
-            lv_stations['geometry'].within(grid_buffer)
+    mv_dist_hv_lines_df = mv_dist_hv_lines_df.loc[
+            mv_dist_hv_lines_df['geometry'].intersects(district_geom)
             ]
 
-    # Calculate grid capacity per level
-    columns = dist_levs
-    index =   ['s_nom_length_MVAkm']
-    dist_cap_df = pd.DataFrame(index=index, columns=columns)
+    ### LV Stations
+    mv_dist_lv_stations = lv_stations.loc[
+            lv_stations['geometry'].within(district_geom)
+            ]
 
-    ## HV
-    hv_cap = dist_hv_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
-    for idx, val in hv_cap.iteritems():
-        dist_cap_df.loc['s_nom_length_MVAkm'][idx] = val*1e3
-    ## MV
-    mv_cap = dist_mv_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
-    for idx, val in mv_cap.iteritems():
-        dist_cap_df.loc['s_nom_length_MVAkm'][idx] = val*1e3
+    ### Generation
+    mv_dist_gens_df = gens_df.loc[gens_df['bus'] == bus1]
 
-    # Overload Dataframe
-    dist_s_sum_len_over_t = pd.DataFrame(0.0,
+    ### Load
+    mv_dist_load_df = load_df.loc[load_df['bus'] == bus1]
+
+## Further data on this grid
+
+### Generation Capacities
+    for car in considered_carriers:
+        if car in set(mv_dist_gens_df['name']):
+            mv_dist_df.at[
+                    mv_grid_id,
+                    'cap_'+ car
+                    ] = mv_dist_gens_df.loc[
+                            mv_dist_gens_df['name'] == car
+                            ]['p_nom'].sum()
+
+### Calculate grid capacity and length per level
+    columns = mv_dist_levs
+    index =   ['Cap. in GVAkm', 'Len. in km']
+    mv_dist_cap_df = pd.DataFrame(index=index, columns=columns)
+
+    hv_cap = mv_dist_hv_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
+    mv_cap = mv_dist_mv_lines_df.groupby('lev')['s_nom_length_GVAkm'].sum()
+
+    cap = hv_cap.append(mv_cap)
+    for idx1, val1 in cap.iteritems():
+        mv_dist_cap_df.at['Cap. in GVAkm', idx1] = val1
+        mv_dist_df.at[mv_grid_id,'cap_'+ idx1] = val1
+
+    hv_len = mv_dist_hv_lines_df.groupby('lev')['length'].sum()
+    mv_len = mv_dist_mv_lines_df.groupby('lev')['length'].sum()
+
+    length = hv_len.append(mv_len)
+    for idx1, val1 in length.iteritems():
+        mv_dist_cap_df.at['Len. in km', idx1] = val1
+        mv_dist_df.at[mv_grid_id,'len_'+ idx1] = val1
+
+## Loading Dataframes
+    s_sum_len_t = pd.DataFrame(0.0,
                                    index=snap_idx,
-                                   columns=dist_levs)
-
-    dist_s_sum_len_over_t_norm = pd.DataFrame(0.0,
+                                   columns=mv_dist_levs)
+    s_sum_len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
-                                   columns=dist_levs)
+                                   columns=mv_dist_levs)
+    s_sum_len_under_t = pd.DataFrame(0.0,
+                                   index=snap_idx,
+                                   columns=mv_dist_levs)
 
-    for df in [dist_mv_lines_df, dist_hv_lines_df]:
+    for df in [mv_dist_mv_lines_df, mv_dist_hv_lines_df]:
 
-        for i, r in df.iterrows():
-            lev = r['lev']
+        for idx2, row2 in df.iterrows():
+            lev = row2['lev']
 
-            s_over_series = pd.Series(data=r['s_over_abs'],
-                                      index=snap_idx)*1e3       # Then in MVAkm
+            #### s_len
+            s_len_series = pd.Series(
+                    data=row2['s_len_abs'],
+                    index=snap_idx)
 
-            dist_s_sum_len_over_t[lev] = (  dist_s_sum_len_over_t[lev]
-                                            + s_over_series)
+            s_sum_len_t[lev] = (s_sum_len_t[lev]
+                                     + s_len_series)
 
-    for col in dist_levs:
-        dist_s_sum_len_over_t_norm[col] = (
-                dist_s_sum_len_over_t[col]
-                / dist_cap_df.loc['s_nom_length_MVAkm'][col]
-                * 100)
-    # Generation
-    dist_gen_df = gens_df.loc[gens_df['bus'] == bus1]
+            #### s_over
+            s_over_series = pd.Series(
+                    data=row2['s_over_abs'],
+                    index=snap_idx)
+
+            s_sum_len_over_t[lev] = (s_sum_len_over_t[lev]
+                                     + s_over_series)
+
+            #### s_under
+            s_under_series = pd.Series(
+                    data=row2['s_under_abs'],
+                    index=snap_idx)
+
+            s_sum_len_under_t[lev] = (s_sum_len_under_t[lev]
+                                     + s_under_series)
+
+## Generation Dataframes
+
     columns = [
             car for car in  carrier_colors.keys()
-            if (car in set(dist_gen_df['name']))
+            if (car in set(mv_dist_gens_df['name']))
             ]
 
-    dist_gen_dispatch_t = pd.DataFrame(0.0,
-                                       index=snap_idx,
-                                       columns=columns)
+    gen_dispatch_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=columns)
+    var_dispatch_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['var_rens'])
 
-    for idx, row in dist_gen_df.iterrows():
-        name = row['name']
-        p_series = pd.Series(data=row['p'], index=snap_idx)
-        dist_gen_dispatch_t[name] = dist_gen_dispatch_t[name] + p_series
+    for idx1, row1 in mv_dist_gens_df.iterrows():
+        name = row1['name']
+        p_series = pd.Series(data=row1['p'], index=snap_idx)
+        gen_dispatch_t[name] = gen_dispatch_t[name] + p_series
 
-    # Load
-    dist_load_df = load_df.loc[load_df['bus'] == bus1]
-    dist_load_t = pd.DataFrame(0.0,
-                                       index=snap_idx,
-                                       columns=['load'])
+        if name in var_rens:
+            var_dispatch_t['var_rens'] = (
+                    var_dispatch_t['var_rens']
+                    + p_series)
 
-    for idx, row in dist_load_df.iterrows():
-        p_series = pd.Series(data=row['p'], index=snap_idx)
-        dist_load_t['load'] = dist_load_t['load'] + p_series
+## Load
+    load_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['load'])
 
-    # Voltage
+    for idx1, row1 in mv_dist_load_df.iterrows():
+        p_series = pd.Series(data=row1['p'], index=snap_idx)
+        load_t['load'] = load_t['load'] + p_series
 
-    dist_voltage_over_t = pd.DataFrame(0.0,
-                                       index=snap_idx,
-                                       columns=['MV_volt'])
+    res_load_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['res_load'])
+    res_load_t['res_load'] = load_t['load'] - var_dispatch_t['var_rens']
 
-    for idx, row in dist_lv_stations.iterrows():
-        volt_over_series = pd.Series(data=row['v_over_bol'], index=snap_idx)
-        dist_voltage_over_t['MV_volt'] = dist_voltage_over_t['MV_volt'] + volt_over_series
+    mv_dist_df.at[mv_grid_id, 'mean_res_l.'] = res_load_t['res_load'].mean()
 
-    dist_voltage_over_t_norm = dist_voltage_over_t / len(dist_lv_stations) * 100
+## Voltage
+    voltage_over_t = pd.DataFrame(
+            0.0,
+            index=snap_idx,
+            columns=['MV_volt'])
 
+    for idx1, row1 in mv_dist_lv_stations.iterrows():
+        volt_over_series = pd.Series(
+                data=row1['v_over_bol'],
+                index=snap_idx)
+        voltage_over_t['MV_volt'] = (
+                voltage_over_t['MV_volt']
+                + volt_over_series)
 
-    # Correlation
-    threshed_df = dist_s_sum_len_over_t.loc[(dist_s_sum_len_over_t != 0).all(axis=1)]
+    voltage_over_t_norm = (
+            voltage_over_t
+            / len(mv_dist_lv_stations)
+            * 100)
 
-    corr_df = threshed_df.corr()
+# Correlation
+    gen_dispatch_t_subset = pd.DataFrame(
+            index=snap_idx)
 
-    lev0 = corr_df.columns[0]
-    lev1 = corr_df.columns[1]
-    r = corr_df.iloc[0][1]
-    lev0_rel_overl_max = dist_s_sum_len_over_t_norm[lev0].max()
-    lev1_rel_overl_max = dist_s_sum_len_over_t_norm[lev1].max()         # Better no normalized here...
-    cap0 = dist_cap_df.loc['s_nom_length_MVAkm'][lev0]
-    cap1 = dist_cap_df.loc['s_nom_length_MVAkm'][lev1]
+    for carrier in considered_carriers:
+        if carrier in set(gen_dispatch_t.columns):
+            gen_dispatch_t_subset[carrier] = gen_dispatch_t[carrier]
 
-    dist_df = dist_df.append({'mv_grid': mv_grid_id,
-                    'lev0': lev0,
-                    'lev1': lev1,
-                    'r': r,
-                    'lev0_rel_overl_max': lev0_rel_overl_max,
-                    'lev1_rel_overl_max': lev1_rel_overl_max,
-                    'cap0': cap0,
-                    'cap1': cap1},
-                ignore_index=True)
+## Overloading and Loading correlation
+### Overloading
+    s_sum_len_over_t_thresh = s_sum_len_over_t.loc[
+            (s_sum_len_over_t != 0).any(axis=1)
+            ]
 
+    s_sum_len_over_corr = s_sum_len_over_t_thresh.corr(
+            method='pearson')
+    mv_dist_corr_over_df.at[
+            mv_grid_id,
+            'MV_up'] = s_sum_len_over_corr.loc[
+                    mv_dist_levs[0]
+                    ][
+                            mv_dist_levs[1]]
 
-    # Cleaning out levels with low overload for plots
-    make_plots = True
-    for column in dist_s_sum_len_over_t_norm.columns:
-        max_over = dist_s_sum_len_over_t_norm[column].max()
-        if max_over < 0.2:
-            make_plots = False
+### Loading
+    s_sum_len_corr = s_sum_len_t.corr(
+            method='pearson')
+    mv_dist_corr_tot_df.at[
+            mv_grid_id,
+            'MV_up'] = s_sum_len_corr.loc[
+                    mv_dist_levs[0]][mv_dist_levs[1]]
 
-    # Plots
-    ## Line
-    if make_plots == True:
-        plt_name = "District overloading"
-        file_dir = dist_plot_dir
+## Line Overloading and Loading with everything else
+### Overloading
+    corr_mv_over_df = s_sum_len_over_t.merge(
+            gen_dispatch_t_subset,
+            left_index=True,
+            right_index=True
+            ).merge(
+                    load_t,
+                    left_index=True,
+                    right_index=True
+                    ).merge(
+                        var_dispatch_t,
+                        left_index=True,
+                        right_index=True
+                        ).merge(
+                            res_load_t,
+                            left_index=True,
+                            right_index=True
+                                ).merge(
+                                voltage_over_t,
+                                left_index=True,
+                                right_index=True
+                                    )
 
-        fig, ax = plt.subplots(3, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-        fig.set_size_inches(10,6)
+    corr_mv_over_thresh_df = corr_mv_over_df.loc[
+            (corr_mv_over_df != 0).any(axis=1)]
 
-        dist_s_sum_len_over_t.plot(
-                kind='line',
-                legend=True,
-                color=[level_colors[lev] for lev in  dist_s_sum_len_over_t.columns],
-                linewidth=2,
-                ax = ax[0])
-        leg = ax[0].legend(loc='upper right',
+    mv_over_corr = corr_mv_over_thresh_df.corr(method='pearson')
+
+### Loading
+    corr_mv_df = s_sum_len_t.merge(
+            gen_dispatch_t_subset,
+            left_index=True,
+            right_index=True
+            ).merge(
+                    load_t,
+                    left_index=True,
+                    right_index=True
+                    ).merge(
+                        var_dispatch_t,
+                        left_index=True,
+                        right_index=True
+                        ).merge(
+                            res_load_t,
+                            left_index=True,
+                            right_index=True
+                                ).merge(
+                                voltage_over_t,
+                                left_index=True,
+                                right_index=True
+                                    )
+
+    corr_mv_thresh_df = corr_mv_df.loc[
+            (corr_mv_df != 0).any(axis=1)]
+
+    mv_corr = corr_mv_thresh_df.corr(method='pearson')
+
+### Writing
+    for col in list(gen_dispatch_t_subset.columns) + ['MV_volt', 'load', 'var_rens', 'res_load']:
+        for lev in mv_dist_levs:
+            corr_lev = lev
+            if (lev == 'EHV220')|(lev == 'EHV380')|(lev == 'HV'):
+                corr_lev = 'up_lev'
+
+            mv_dist_corr_over_df.at[
+                    mv_grid_id,
+                    corr_lev + '_' + col
+                    ] = mv_over_corr.loc[lev][col]
+            mv_dist_corr_tot_df.at[
+                    mv_grid_id,
+                    corr_lev + '_' + col
+                    ] = mv_corr.loc[lev][col]
+
+# Plots
+## Line
+    plt_name = "MV District overloading"
+    file_dir = dist_plot_dir
+
+    fig, ax = plt.subplots(5, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+    fig.set_size_inches(10,10)
+
+    for i in [0,1]:
+        y_max = s_sum_len_t[mv_dist_levs[i]].max()
+
+        s_sum_len_under_t_lev = s_sum_len_under_t[
+                mv_dist_levs[i]].rename('normal ' + mv_dist_levs[i])
+        s_sum_len_over_t_lev = s_sum_len_over_t[
+                mv_dist_levs[i]].rename('overloaded ' + mv_dist_levs[i])
+
+        plot_df = s_sum_len_under_t_lev.to_frame().join(s_sum_len_over_t_lev)
+        plot_df.plot(
+            kind='area',
+            legend=True,
+            color=[level_colors[mv_dist_levs[i]], 'orange'],
+            linewidth=0.2,
+            ax = ax[i])
+
+        ax[i].set_ylim([0,y_max])
+        leg = ax[i].legend(loc='upper right',
                   ncol=1, fancybox=True, shadow=True, fontsize=9)
         leg.get_frame().set_alpha(0.5)
-        ax[0].set(ylabel='Overloading in MVAkm')
+        ax[i].set(ylabel='Loading. in GVAkm')
+    i = 2
+    voltage_over_t_norm.plot(
+            kind='line',
+            legend=True,
+            color='black',
+            linewidth=1,
+            ax = ax[i])
 
-        dist_voltage_over_t_norm.plot(
-                kind='line',
-                legend=True,
-                color='black',
-                linewidth=1,
-                ax = ax[1])
-        leg = ax[1].legend(loc='upper right',
-                  ncol=1, fancybox=True, shadow=True, fontsize=9)
-        leg.get_frame().set_alpha(0.5)
-        ax[1].set(ylabel='Volt. issues in % of buses')
+    leg = ax[i].legend(loc='upper right',
+              ncol=1, fancybox=True, shadow=True, fontsize=9)
+    leg.get_frame().set_alpha(0.5)
+    ax[i].set(ylabel='Volt. prob. in % of lv_stations')
+    i = 3
+    gen_dispatch_t.plot(
+            kind='area',
+            legend=True,
+            color=[carrier_colors[name] for name in  gen_dispatch_t.columns],
+            linewidth=.5,
+            alpha=0.7,
+            ax = ax[i])
 
-        dist_gen_dispatch_t.plot(
-                kind='area',
-                legend=True,
-                color=[carrier_colors[name] for name in  dist_gen_dispatch_t.columns],
-                linewidth=.5,
-                alpha=0.7,
-                ax = ax[2])
-        dist_load_t.plot(
-                kind='line',
-                legend=True,
-                color='grey',
-                linewidth=3,
-                alpha=0.9,
-                ax=ax[2])
-        leg = ax[2].legend(loc='upper right',
-                  ncol=3, fancybox=True, shadow=True, fontsize=9)
-        leg.get_frame().set_alpha(0.5)
-        ax[2].set(ylabel='Generation in MW')
+    leg = ax[i].legend(loc='upper right',
+              ncol=5, fancybox=True, shadow=True, fontsize=9)
+    leg.get_frame().set_alpha(0.5)
+    ax[i].set(ylabel='Gen. in MW')
+    i = 4
+    load_t.plot(
+            kind='line',
+            legend=True,
+            color='grey',
+            linewidth=3,
+            alpha=0.9,
+            ax=ax[4])
+    res_load_t.plot(
+            kind='line',
+            legend=True,
+            color='red',
+            linewidth=3,
+            alpha=0.9,
+            ax=ax[4])
+    leg = ax[4].legend(loc='upper right',
+              ncol=1, fancybox=True, shadow=True, fontsize=9)
+    leg.get_frame().set_alpha(0.5)
+    ax[4].set(ylabel='Load in MW')
+
+    file_name = 'district_overloading_mv_grid_' + str(mv_grid_id)
+    fig.savefig(file_dir + file_name + '.png')
+    add_figure_to_tex(plt_name, file_dir, file_name)
+    plt.close(fig)
+
+    ## Spatial
+    plt_name = "Grid District"
+    file_dir = dist_plot_dir
+    fig, ax1 = plt.subplots(1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+    fig.set_size_inches(6,6)
+    xmin, ymin, xmax, ymax = district_geom.bounds
+
+    ax1.set_xlim([xmin,xmax])
+    ax1.set_ylim([ymin,ymax])
+
+    mv_trafo_df = mv_trafo_df.set_geometry('grid_buffer')
+    mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
+               alpha = 0.3,
+               color = 'y'
+               )
+    mv_trafo_df = mv_trafo_df.set_geometry('geometry')
+    mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
+               alpha = 1,
+               color = 'r',
+               marker='o',
+               markersize=300,
+               facecolors='none'
+               )
+
+    ax1 = add_plot_lines_to_ax(mv_dist_hv_lines_df, ax1, level_colors, 3)
+    ax1 = add_plot_lines_to_ax(mv_dist_mv_lines_df, ax1, level_colors, 1)
+
+    file_name = 'district_' + str(mv_grid_id)
+    fig.savefig(file_dir + file_name + '.png')
+    add_figure_to_tex(plt_name, file_dir, file_name)
+    plt.close(fig)
+#
+#    ## Scatter
+#    plt_name = "Correlation of District Overload"
+#    file_dir = dist_plot_dir
+#
+#    plot_df = dist_s_sum_len_over_t
+#
+#    plot_df = plot_df.loc[(plot_df != 0).all(axis=1)]    # Watchout - this is an important detail!!!
+#    if plot_df.empty:
+#        continue
+#
+#    fig, ax1 = plt.subplots(1)
+#    fig.set_size_inches(12,6)
+#
+#    lev0 = plot_df.columns[0]
+#    lev1 = plot_df.columns[1]
+#
+#    ax1.set_xlim(0, max(plot_df[lev0]))
+#    ax1.set_ylim(0, max(plot_df[lev1]))
+#
+#    plt_name = (lev0
+#                +' and '
+#                + lev1
+#                +' Loading Correlation_'
+#                + str(mv_grid_id))
+#
+#    plot_df.plot.scatter(
+#            x=lev0,
+#            y=lev1,
+#            color='grey',
+#            label=lev1,
+#            alpha=0.6,
+#            ax=ax1)
+#
+#    regr = linear_model.LinearRegression()
+#    x = plot_df[lev0].values.reshape(len(plot_df), 1)
+#    y = plot_df[lev1].values.reshape(len(plot_df), 1)
+#    regr.fit(x, y)
+#    plt.plot(x, regr.predict(x), color='red', linewidth=1)
+#    plt.xlabel('Overloaded lines in MVAkm, ' + lev0)
+#    plt.ylabel('Overloaded lines in MVAkm, ' + lev1)
+#
+#    file_name = 'loading_corr_' + str(mv_grid_id)
+#    fig.savefig(file_dir + file_name + '.png')
+#    add_figure_to_tex(plt_name, file_dir, file_name)
+#    plt.close(fig)
 
 
-        file_name = 'district_overloading_mv_grid_' + str(mv_grid_id)
-        fig.savefig(file_dir + file_name + '.png')
-        add_figure_to_tex(plt_name, file_dir, file_name)
-        plt.close(fig)
 
-        ## Spatial
-        plt_name = "Grid District"
-        file_dir = dist_plot_dir
-        fig, ax1 = plt.subplots(1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-        fig.set_size_inches(6,6)
-        xmin, ymin, xmax, ymax = grid_buffer.bounds
+## HV district overniew
+plt_name = "MV districts"
+file_dir = dist_plot_dir
 
-        ax1.set_xlim([xmin,xmax])
-        ax1.set_ylim([ymin,ymax])
+fig, ax1 = plt.subplots(1)
+fig.set_size_inches(12,14)
 
-        mv_trafo_df = mv_trafo_df.set_geometry('grid_buffer')
-        mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
-                   alpha = 0.3,
-                   color = 'y'
-                   )
-        mv_trafo_df = mv_trafo_df.set_geometry('geometry')
-        mv_trafo_df[mv_trafo_df['subst_id'] == mv_grid_id].plot(ax=ax1,
-                   alpha = 1,
-                   color = 'r',
-                   marker='o',
-                   markersize=300,
-                   facecolors='none'
-                   )
+plot_df = nuts_shp.loc[nuts_shp['nuts_id'] == 'DE']['geometry']
+plot_df.plot(ax=ax1,
+             alpha=0.2,
+             color='green')
 
-        ax1 = add_plot_lines_to_ax(dist_hv_lines_df, ax1, level_colors, 3)
-        ax1 = add_plot_lines_to_ax(dist_mv_lines_df, ax1, level_colors, 1)
+mv_trafo_df['center_geom'] = mv_trafo_df['geometry'].apply(
+        lambda x: x.representative_point().coords[:][0])
+plot_df = mv_trafo_df.set_geometry('grid_buffer')
 
-        file_name = 'district_' + str(mv_grid_id)
-        fig.savefig(file_dir + file_name + '.png')
-        add_figure_to_tex(plt_name, file_dir, file_name)
-        plt.close(fig)
+plot_df.plot(ax=ax1, alpha=0.7, color='grey')
+#plot_df.apply(lambda x: ax1.text(
+#        x.center_geom[0],
+#        x.center_geom[1],
+#        x.subst_id,
+#        ha='center'),axis=1);
 
-        ## Scatter
-        plt_name = "Correlation of District Overload"
-        file_dir = dist_plot_dir
-
-        plot_df = dist_s_sum_len_over_t
-
-        plot_df = plot_df.loc[(plot_df != 0).all(axis=1)]    # Watchout - this is an important detail!!!
-        if plot_df.empty:
-            continue
-
-        fig, ax1 = plt.subplots(1)
-        fig.set_size_inches(12,6)
-
-        lev0 = plot_df.columns[0]
-        lev1 = plot_df.columns[1]
-
-        ax1.set_xlim(0, max(plot_df[lev0]))
-        ax1.set_ylim(0, max(plot_df[lev1]))
-
-        plt_name = (lev0
-                    +' and '
-                    + lev1
-                    +' Loading Correlation_'
-                    + str(mv_grid_id))
-
-        plot_df.plot.scatter(
-                x=lev0,
-                y=lev1,
-                color='grey',
-                label=lev1,
-                alpha=0.6,
-                ax=ax1)
-
-        regr = linear_model.LinearRegression()
-        x = plot_df[lev0].values.reshape(len(plot_df), 1)
-        y = plot_df[lev1].values.reshape(len(plot_df), 1)
-        regr.fit(x, y)
-        plt.plot(x, regr.predict(x), color='red', linewidth=1)
-        plt.xlabel('Overloaded lines in MVAkm, ' + lev0)
-        plt.ylabel('Overloaded lines in MVAkm, ' + lev1)
-
-        file_name = 'loading_corr_' + str(mv_grid_id)
-        fig.savefig(file_dir + file_name + '.png')
-        add_figure_to_tex(plt_name, file_dir, file_name)
-        plt.close(fig)
+#### Save
+file_name = 'mv_districts'
+fig.savefig(file_dir + file_name + '.png')
+add_figure_to_tex (plt_name, file_dir, file_name)
+plt.close(fig)
 
 
-#TODO Plot mit MV grids anhand Überlastung
-only_over_dist_df = dist_df.dropna(axis=0, how='any')
+# Correlation Tables
+title = 'Correlation MV Overloading'
+file_name = 'corr_mv_over'
+file_dir = dist_corr_dir
 
-
-#TODO: ganz neue corr tables machen für MV!!!
-## Save
-title = 'MV grid districts overview'
-file_name = 'mv_grid_districts_info'
-file_dir = dist_dir
-df = only_over_dist_df.set_index('mv_grid').sort_values(by=['r'],ascending=False)
+df = mv_dist_corr_over_df.loc[mv_dist_df['considered']]
+df.index = df.index.map(str)
 
 df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
-render_df = df[['lev0', 'lev1', 'r']].applymap(lambda x: to_str(x))
-fig, ax = render_mpl_table(render_df,
+fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=1.0)
 fig.savefig(file_dir + file_name + '.png')
 add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
+
+title = 'Correlation MV Loading'
+file_name = 'corr_mv_loading'
+file_dir = dist_corr_dir
+df = mv_dist_corr_tot_df.loc[mv_dist_df['considered']]
+df.index = df.index.map(str)
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=1.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
+
+# Second level correlation
+## Loading
+
+considered_columns = [
+        'cap_solar',
+        'cap_wind',
+        'mean_res_l.',
+        'len_MV']
+second_corr_mv = mv_dist_df[
+        considered_columns
+        ][mv_dist_df['considered']].merge(
+            mv_dist_corr_tot_df,
+            left_index=True,
+            right_index=True
+            ).corr(method='pearson')
+
+second_corr_mv = second_corr_mv.drop(mv_dist_corr_tot_df.columns, axis=0)
+second_corr_mv = second_corr_mv.drop(considered_columns, axis=1)
+
+title = 'Second Level MV Correlation (Loading)'
+file_name = 'second_corr_mv_loading'
+file_dir = dist_corr_dir
+df = second_corr_mv
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=2.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
 
 
+## Overloading
+second_corr_mv = mv_dist_df[
+        considered_columns
+        ][mv_dist_df['considered']].merge(
+            mv_dist_corr_over_df,
+            left_index=True,
+            right_index=True
+            ).corr(method='pearson')
+
+second_corr_mv = second_corr_mv.drop(mv_dist_corr_tot_df.columns, axis=0)
+second_corr_mv = second_corr_mv.drop(considered_columns, axis=1)
 
 
+title = 'Second Level MV Correlation (Overloading)'
+file_name = 'second_corr_mv_overloading'
+file_dir = dist_corr_dir
+df = second_corr_mv
 
-
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+fig, ax = render_corr_table(df,
+                           header_columns=0,
+                           col_width=1.5,
+                           first_width=2.0)
+fig.savefig(file_dir + file_name + '.png')
+add_table_to_tex(title, file_dir, file_name)
+plt.close(fig)
 
 #%% Plot and Output Data Processing
 logger.info('Plot and Output Data Processing')
