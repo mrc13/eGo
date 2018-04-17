@@ -11,7 +11,7 @@ Corr Functions
 
 def corr_colors (v_corr=0):
     try:
-        i = abs(v_corr)
+        i = round(abs(v_corr), 2)
         rgb = (1-i,i,0)
         return rgb
     except:
@@ -157,8 +157,9 @@ def render_corr_table(data, col_width=3.0, row_height=0.625, font_size=12,
                      ax=None, **kwargs):
     if ax is None:
 
+        index_name = data.index.name
         data = data.reset_index()
-        data = data.rename(columns={'index': ''})
+        data = data.rename(columns={index_name: ''})
 
         size = (np.array(data.shape[::-1]) + np.array([1, 1])) * np.array([col_width, row_height])
         fig, ax = plt.subplots(figsize=size)

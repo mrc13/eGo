@@ -772,10 +772,7 @@ for idx, row in lv_stations.iterrows():
 
 voltage_over_t_norm = voltage_over_t / len(lv_stations) * 100
 
-
-#%% Corr Germany Corr and Plots
-
-# Corr
+# Corr and Plots
 considered_carriers = ['solar',
                        'wind',
                        'coal',
@@ -872,47 +869,47 @@ file_name = 'overview_germany'
 fig.savefig(file_dir + file_name + '.png')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
-
-##% Scatter Plots
-plt_name = "Correlation of Overloaded grid Length"
-file_dir = ger_plot_dir
-for x_lev in len_over_t.columns:
-    fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-    fig.set_size_inches(12,6)
-    ax1.set_xlim(0, max(len_over_t[x_lev]))
-    y_max = 0
-    for y_lev in len_over_t.columns:
-        y_max_lev = max(len_over_t[y_lev])
-        if y_max_lev > y_max:
-            y_max = y_max_lev
-        ax1.set_ylim(0, y_max)
-        x_volt = get_volt_from_lev(x_lev)
-        y_volt = get_volt_from_lev(y_lev)
-        if x_volt == y_volt:
-            continue
-        plt_name = x_lev +' and ' + y_lev +' Loading Correlation'
-
-## Dass 380 am meisten ansteigt bei HV und MV lässt sich erklären, da die RE, die das Netz überlasten aus dem VN kommen (angeschlossen sind)
-        len_over_t.plot.scatter(
-                x=x_lev,
-                y=y_lev,
-                color=level_colors[y_lev],
-                label=y_lev,
-                alpha=0.5,
-                ax=ax1)
-
-        regr = linear_model.LinearRegression()
-        x = len_over_t[x_lev].values.reshape(len(len_over_t), 1)
-        y = len_over_t[y_lev].values.reshape(len(len_over_t), 1)
-        regr.fit(x, y)
-        plt.plot(x, regr.predict(x), color=level_colors[y_lev], linewidth=1)
-        plt.ylabel('Overloaded lines in km')
-        plt.xlabel(x_lev + ', Overloaded lines in km')
-
-    file_name = 'loading_corr_' + x_lev
-    fig.savefig(file_dir + file_name + '.png')
-    add_figure_to_tex (plt_name, file_dir, file_name)
-    plt.close(fig)
+#
+###% Scatter Plots
+#plt_name = "Correlation of Overloaded grid Length"
+#file_dir = ger_plot_dir
+#for x_lev in len_over_t.columns:
+#    fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
+#    fig.set_size_inches(12,6)
+#    ax1.set_xlim(0, max(len_over_t[x_lev]))
+#    y_max = 0
+#    for y_lev in len_over_t.columns:
+#        y_max_lev = max(len_over_t[y_lev])
+#        if y_max_lev > y_max:
+#            y_max = y_max_lev
+#        ax1.set_ylim(0, y_max)
+#        x_volt = get_volt_from_lev(x_lev)
+#        y_volt = get_volt_from_lev(y_lev)
+#        if x_volt == y_volt:
+#            continue
+#        plt_name = x_lev +' and ' + y_lev +' Loading Correlation'
+#
+### Dass 380 am meisten ansteigt bei HV und MV lässt sich erklären, da die RE, die das Netz überlasten aus dem VN kommen (angeschlossen sind)
+#        len_over_t.plot.scatter(
+#                x=x_lev,
+#                y=y_lev,
+#                color=level_colors[y_lev],
+#                label=y_lev,
+#                alpha=0.5,
+#                ax=ax1)
+#
+#        regr = linear_model.LinearRegression()
+#        x = len_over_t[x_lev].values.reshape(len(len_over_t), 1)
+#        y = len_over_t[y_lev].values.reshape(len(len_over_t), 1)
+#        regr.fit(x, y)
+#        plt.plot(x, regr.predict(x), color=level_colors[y_lev], linewidth=1)
+#        plt.ylabel('Overloaded lines in km')
+#        plt.xlabel(x_lev + ', Overloaded lines in km')
+#
+#    file_name = 'loading_corr_' + x_lev
+#    fig.savefig(file_dir + file_name + '.png')
+#    add_figure_to_tex (plt_name, file_dir, file_name)
+#    plt.close(fig)
 
 ##% Histograms
 plt_name = "Retative Overloaded Length Histogram"
@@ -1745,11 +1742,6 @@ for idx0, row0 in mv_trafo_df.iterrows():
 
     mv_dist_df.at[mv_grid_id, 'considered'] = True
 
-    if mv_grid_id > 100:# length['MV'] <= 100:
-        mv_dist_df.at[mv_grid_id, 'considered'] = False
-        mv_dist_df.at[mv_grid_id, 'drop_reason'] = 'short MV grid'
-        continue
-
 ## Voltage in this district
     mv_dist_volts = []
 
@@ -2310,326 +2302,3 @@ fig, ax = render_corr_table(df,
 fig.savefig(file_dir + file_name + '.png')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
-
-#%% Plot and Output Data Processing
-logger.info('Plot and Output Data Processing')
-
-### Total grid capacity and max and mean loading per voltage level in TVAkm
-s_sum_t = pd.DataFrame(0.0, ## in TVAkm
-                                   index=snap_idx,
-                                   columns=all_levels)
-
-for index, row in line_gdf.iterrows():
-    v_nom = row['v_nom']
-    s_series = pd.Series(data=row['s'], index=snap_idx)*row['length']*1e-6
-    s_sum_t[v_nom] = s_sum_t[v_nom] + s_series
-
-for index, row in mv_line_gdf.iterrows():
-    v_nom = row['v_nom']
-    s_series = pd.Series(data=row['s'], index=snap_idx)*row['length']*1e-6
-    s_sum_t[v_nom] = s_sum_t[v_nom] + s_series
-
-
-
-### Total grid capacity and loading per voltage level
-trans_cap_df = line_gdf[['s_nom_length_TVAkm', 'v_nom']].groupby('v_nom').sum()
-mv_trans_cap_df = mv_line_gdf[['s_nom_length_TVAkm', 'v_nom']].groupby('v_nom').sum()
-total_lines_df = mv_trans_cap_df.append(trans_cap_df)
-total_lines_df = total_lines_df.rename(
-        columns={'s_nom_length_TVAkm': 'total_cap'}) ## All data is in TVAkm
-total_lines_df['max_total_loading'] = s_sum_t.max()
-total_lines_df['mean_total_loading'] = s_sum_t.mean()
-
-
-s_sum_rel_t = pd.DataFrame(0.0, ## in TVAkm
-                                   index=snap_idx,
-                                   columns=all_levels)
-for column in s_sum_rel_t:
-    s_sum_rel_t[column] = s_sum_t[column] / total_lines_df['total_cap'].loc[column]
-
-s_sum_over_rel_t = pd.DataFrame(0.0, ## in TVAkm
-                                   index=snap_idx,
-                                   columns=all_levels)
-for column in s_sum_over_rel_t:
-    s_sum_over_rel_t[column] = s_sum_over_t[column] / total_lines_df['total_cap'].loc[column]
-
-#%% Plots
-logger.info('Plottig')
-
-#### Scatter Plot
-plt_name = "MV/HV Comparison"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(10,10)
-
-mv_grids_df.plot.scatter(
-        x='Avg. feed-in MV',
-        y='Avg. feed-in HV',
-        color='blue',
-        label='MV/HV Comparison',
-        ax=ax1)
-
-ax1.plot([-250, 200],
-         [-250, 200],
-         ls="--",
-         color='red')
-
-file_name = 'feed-in_comparison'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-
-### Plot and Corr
-#### Line Plot
-plt_name = "Voltage Level Total Appearent Power"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,4)
-
-s_sum_t.plot(
-        kind='line',
-        title=plt_name,
-        legend=True,
-        linewidth=2,
-        ax = ax1)
-
-file_name = 'loading_per_level'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "110kV and 220kV Load Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_t.plot.scatter(
-        x=110.0,
-        y=220.0,
-        color='green',
-        label='110 - 220kV',
-        ax=ax1)
-
-
-regr = linear_model.LinearRegression()
-x = s_sum_t[110.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_t[220.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'loading_corr_110_220'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "220kV and 380kV Load Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_t.plot.scatter(
-        x=220.0,
-        y=380.0,
-        color='orange',
-        label='220-380kV',
-        ax=ax1)
-
-regr = linear_model.LinearRegression()
-x = s_sum_t[220.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_t[380.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'loading_corr_220_380'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Histogram
-plt_name = "Loading Hist"
-fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(6,4)
-
-s_sum_rel_t.plot.hist(alpha = 0.5, bins=20, ax=ax)
-
-file_name = 'loading_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-
-#################################
-
-
-#################################
-### Plot Overload
-#### Line Plot
-
-
-#### Scatter Plot
-plt_name = "220kV and 380kV Overload Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_over_t.plot.scatter(
-        x=220.0,
-        y=380.0,
-        color='orange',
-        label='220-380kV',
-        ax=ax1)
-
-regr = linear_model.LinearRegression()
-x = s_sum_over_t[220.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_over_t[380.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'overl_corr_220_380'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Scatter Plot
-plt_name = "110kV an 220kV Overload Correlation"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(12,6)
-
-s_sum_over_t.plot.scatter(
-        x=110.0,
-        y=220.0,
-        color='green',
-        label='110-220kV',
-        ax=ax1)
-
-regr = linear_model.LinearRegression()
-x = s_sum_over_t[110.0].values.reshape(len(s_sum_t), 1)
-y = s_sum_over_t[220.0].values.reshape(len(s_sum_t), 1)
-regr.fit(x, y)
-plt.plot(x, regr.predict(x), color='grey', linewidth=1)
-
-file_name = 'overl_corr_110_220'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-#### Histogram
-plt_name = "Loading Hist"
-fig, ax = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(6,4)
-
-s_sum_over_rel_t.plot.hist(alpha = 0.5, bins=20, ax=ax)
-
-file_name = 'overloading_hist'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-
-##### Corr Test
-mean_squared_error(regr.predict(x), y)
-r2_score(regr.predict(x), y)
-
-s_sum_t.corr(method='pearson', min_periods=1)
-scipy.stats.pearsonr(regr.predict(x), y)[0][0]
-
-#################################
-
-#################################
-### Plot Barplot für Netzkapazitüt und Belastung
-
-plt_name = "Grid Capacity per voltage level in TVAkm"
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,4)
-
-total_lines_df.plot(
-        kind='bar',
-        title=plt_name,
-        ax = ax1)
-
-file_name = 'grid_cap'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-#################################
-
-#################################
-### Plot: Ein- und Ausspeisende MV Grids.
-plt_name = "MV Grid Feed-in"
-marker_sz_mltp = 20
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,12)
-
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 380.]
-plot_df.plot(
-        color='orange',
-        linewidth=5,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 220.]
-plot_df.plot(
-        color='green',
-        linewidth=3,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 110.]
-plot_df.plot(
-        color='blue',
-        linewidth=1,
-        ax = ax1)
-plot_df = mv_line_gdf
-plot_df.plot(
-        color='grey',
-        linewidth=0.4,
-        ax = ax1)
-# HTis is acutally not correct!!!!!
-plot_df= bus_gdf.loc[(~np.isnan(bus_gdf['MV_grid_id'])) & (bus_gdf['p_mean']>=0)]
-plot_df.plot(
-        markersize= plot_df['p_mean']*marker_sz_mltp,
-        color='darkgreen',
-        ax = ax1)
-plot_df= bus_gdf.loc[(~np.isnan(bus_gdf['MV_grid_id'])) & (bus_gdf['p_mean']<0)]
-plot_df.plot(
-        markersize= -plot_df['p_mean']*marker_sz_mltp,
-        color='darkred',
-        ax = ax1)
-
-file_name = 'grid_feed_in'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-#################################
-
-#################################
-### Plot: Transformers
-plt_name = "all Transformers"
-marker_sz_mltp = 20
-fig, ax1 = plt.subplots(1,1) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
-fig.set_size_inches(8,12)
-
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 380.]
-plot_df.plot(
-        color='orange',
-        linewidth=5,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 220.]
-plot_df.plot(
-        color='green',
-        linewidth=3,
-        ax = ax1)
-plot_df = line_gdf.loc[line_gdf['v_nom'] == 110.]
-plot_df.plot(
-        color='blue',
-        linewidth=1,
-        ax = ax1)
-plot_df = mv_line_gdf
-plot_df.plot(
-        color='grey',
-        linewidth=0.4,
-        ax = ax1)
-
-plot_df = trafo_gdf
-plot_df.plot(
-        color='red',
-        markersize=200,
-        ax=ax1)
-plot_df = mv_trafo_gdf
-plot_df.plot(
-        color='violet',
-        markersize=200,
-        ax=ax1)
-
-
-
-
-## Hier Trafos als Punkte Plotten.
-
-file_name = 'all_trafo'
-fig.savefig(plot_dir + file_name + '.pdf')
-fig.savefig(plot_dir + file_name + '.png')
-#################################
