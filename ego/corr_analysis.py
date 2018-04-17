@@ -1335,7 +1335,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
             columns=['res_load'])
     res_load_t['res_load'] = load_t['load'] - var_dispatch_t['var_rens']
 
-    hv_dist_df.at[operator, 'mean_res_l.'] = res_load_t.mean()
+    hv_dist_df.at[operator, 'mean_res_l.'] = res_load_t['res_load'].mean()
 # Correlation
     gen_dispatch_t_subset = pd.DataFrame(
             index=snap_idx)
