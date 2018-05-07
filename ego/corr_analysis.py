@@ -405,6 +405,39 @@ gens_df = gens_df.drop(gens_df.loc[gens_df['frgn'] == True].index, axis=0)
 #%% Basic grid information Calcs.
 logger.info('Basic grid information')
 
+# Scenrio overview
+index = ['Share of RES in installed capacity',
+         'Net electricity consumption (TWh)',
+         'Annual peak load (GW)',
+         'Share of renewable energy in el. consumption']
+columns = []
+scenario_df = pd.DataFrame(index=index, columns=columns)
+
+scenario_df['Status Quo'] = [
+        '46.46%',
+        '506.00',
+        '87.01',
+        '27.31%']
+scenario_df['NEP 2035'] = [
+        '70.02%',
+        '506.00',
+        '87.01',
+        '65.80%']
+## Save
+title = 'Scenario Overview'
+file_name = 'scenario_overview'
+file_dir = analysis_dir
+df = scenario_df
+
+df.to_csv(file_dir + file_name + '.csv', encoding='utf-8')
+render_df = df.applymap(lambda x: to_str(x))
+fig, ax = render_mpl_table(render_df,
+                           header_columns=0,
+                           col_width=3.0,
+                           first_width=14.0)
+fig.savefig(file_dir + file_name + '.png', bbox_inches='tight')
+add_table_to_tex(title, file_dir, file_name)
+
 # MV single
 index = mv_line_df.mv_grid.unique()
 columns = []
@@ -523,7 +556,7 @@ fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
                            first_width=7.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png', bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 
 # HV Total
@@ -574,7 +607,7 @@ fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
                            first_width=3.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 
 
@@ -615,7 +648,7 @@ fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
                            first_width=3.5)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 
 # Generators
@@ -638,7 +671,7 @@ fig, ax = render_mpl_table(render_df,
                            header_columns=0,
                            col_width=3.0,
                            first_width=5.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 
 
@@ -688,7 +721,7 @@ ax[0].set(ylabel='Relative number of lines in %')
 ax[0].set(xlabel='Thermal rated power in MVA')
 
 ## Save
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 
 
@@ -805,7 +838,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=1.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 
 
@@ -866,7 +899,7 @@ leg.get_frame().set_alpha(0.5)
 ax[3].set(ylabel='Generation in GW')
 
 file_name = 'overview_germany'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 #
@@ -907,7 +940,7 @@ plt.close(fig)
 #        plt.xlabel(x_lev + ', Overloaded lines in km')
 #
 #    file_name = 'loading_corr_' + x_lev
-#    fig.savefig(file_dir + file_name + '.png')
+#    fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 #    add_figure_to_tex (plt_name, file_dir, file_name)
 #    plt.close(fig)
 
@@ -937,7 +970,7 @@ plt.xlabel("Overloaded Length in % of total length")
 plt.legend(levs) # Very interesting result. MV grid overloads and HV occurr very local!
 
 file_name = 'overloaded_length_hist'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -980,7 +1013,7 @@ plt.xlabel("Relative overload")
 plt.legend(levs)
 
 file_name = 'rel_overload_hist'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -1024,7 +1057,7 @@ ax1 = add_weighted_plot_lines_to_ax(
         v_size=3)
 
 file_name = 'ger_grid_max_overload'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -1066,7 +1099,7 @@ ax1 = add_weighted_plot_lines_to_ax(
         v_size=3)
 
 file_name = 'ger_grid_dur_overload'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -1101,7 +1134,7 @@ plot_df.plot(color='red',
              ax=ax1)
 
 file_name = 'ger_grid_any_overload'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -1510,7 +1543,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
     ax[2].set(ylabel='Load in MW')
 
     file_name = 'hv_district_overloading_' + operator
-    fig.savefig(file_dir + file_name + '.png')
+    fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
     add_figure_to_tex(plt_name, file_dir, file_name)
     plt.close(fig)
 
@@ -1555,7 +1588,7 @@ for idx0, row0 in hv_grids_shp.iterrows():
 #        ha='center')
 
     file_name = 'hv_district_' + operator
-    fig.savefig(file_dir + file_name + '.png')
+    fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
     add_figure_to_tex(plt_name, file_dir, file_name)
     plt.close(fig)
 
@@ -1582,7 +1615,7 @@ plot_df.apply(lambda x: ax1.text(
         ha='center'),axis=1);
 ### Save
 file_name = 'hv_districts'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -1621,7 +1654,7 @@ ax1 = add_plot_lines_to_ax(
         v_size=0.4)
 ### Save
 file_name = 'hv_grids'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -1636,7 +1669,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=2.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 
@@ -1650,7 +1683,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=2.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 
@@ -1686,7 +1719,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=2.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 
@@ -1713,7 +1746,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=2.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 #%% Corr District Calcs
@@ -2096,7 +2129,7 @@ for idx0, row0 in mv_trafo_df.iterrows():
     ax[4].set(ylabel='Load in MW')
 
     file_name = 'district_overloading_mv_grid_' + str(mv_grid_id)
-    fig.savefig(file_dir + file_name + '.png')
+    fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
     add_figure_to_tex(plt_name, file_dir, file_name)
     plt.close(fig)
 
@@ -2128,7 +2161,7 @@ for idx0, row0 in mv_trafo_df.iterrows():
     ax1 = add_plot_lines_to_ax(mv_dist_mv_lines_df, ax1, level_colors, 1)
 
     file_name = 'district_' + str(mv_grid_id)
-    fig.savefig(file_dir + file_name + '.png')
+    fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
     add_figure_to_tex(plt_name, file_dir, file_name)
     plt.close(fig)
 #
@@ -2174,7 +2207,7 @@ for idx0, row0 in mv_trafo_df.iterrows():
 #    plt.ylabel('Overloaded lines in MVAkm, ' + lev1)
 #
 #    file_name = 'loading_corr_' + str(mv_grid_id)
-#    fig.savefig(file_dir + file_name + '.png')
+#    fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 #    add_figure_to_tex(plt_name, file_dir, file_name)
 #    plt.close(fig)
 
@@ -2205,7 +2238,7 @@ plot_df.plot(ax=ax1, alpha=0.7, color='grey')
 
 #### Save
 file_name = 'mv_districts'
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_figure_to_tex (plt_name, file_dir, file_name)
 plt.close(fig)
 
@@ -2223,7 +2256,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=1.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 
@@ -2238,7 +2271,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=1.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 
@@ -2271,7 +2304,7 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=2.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
 
@@ -2299,6 +2332,6 @@ fig, ax = render_corr_table(df,
                            header_columns=0,
                            col_width=1.5,
                            first_width=2.0)
-fig.savefig(file_dir + file_name + '.png')
+fig.savefig(file_dir + file_name + '.png',  bbox_inches='tight')
 add_table_to_tex(title, file_dir, file_name)
 plt.close(fig)
