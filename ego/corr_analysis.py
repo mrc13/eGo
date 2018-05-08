@@ -27,7 +27,8 @@ from ego.tools.corr_func import (color_for_s_over,
                                  add_table_to_tex,
                                  render_mpl_table,
                                  render_corr_table,
-                                 to_str)
+                                 to_str,
+                                 corr)
 
 ## Logging
 import logging
@@ -734,6 +735,12 @@ s_sum_len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
 
+#x = s_sum_len_over_t['HV']
+#y = s_sum_len_over_t['EHV380']
+#corr(x,y)
+#
+
+
 len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
@@ -850,7 +857,14 @@ file_dir = ger_plot_dir
 fig, ax = plt.subplots(4, sharex=True) # This says what kind of plot I want (this case a plot with a single subplot, thus just a plot)
 fig.set_size_inches(12,10)
 
-frm = s_sum_len_over_t.plot(
+df = s_sum_len_over_t
+df = df.sort_values(by=['EHV380'], ascending=False)
+sort_idx = df.index
+s_sum_len_over_t.loc[sort_idx]
+
+
+frm = s_sum_len_over_t.loc[sort_idx].plot(
+        use_index=False,
         kind='area',
         legend=True,
         color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
@@ -862,7 +876,8 @@ leg = ax[0].legend(loc='upper right',
 leg.get_frame().set_alpha(0.5)
 ax[0].set(ylabel='Overloading in GVAkm')
 
-frm = len_over_t_norm.plot(
+frm = len_over_t_norm.loc[sort_idx].plot(
+        use_index=False,
         kind='line',
         legend=False,
         color=[level_colors[lev] for lev in  s_sum_len_over_t.columns],
@@ -874,7 +889,8 @@ frm = len_over_t_norm.plot(
 #leg.get_frame().set_alpha(0.5)
 ax[1].set(ylabel='Overl. length in %')
 
-frm = voltage_over_t_norm.plot(
+frm = voltage_over_t_norm.loc[sort_idx].plot(
+        use_index=False,
         kind='line',
         legend=True,
         color='black',
@@ -886,7 +902,8 @@ leg = ax[2].legend(loc='upper right',
 leg.get_frame().set_alpha(0.5)
 ax[2].set(ylabel='Volt. issues in % of buses')
 
-frm = (gen_dispatch_t/1e3).plot(
+frm = (gen_dispatch_t.loc[sort_idx]/1e3).plot(
+        use_index=False,
         kind='area',
         legend=True,
         color=[carrier_colors[name] for name in  gen_dispatch_t.columns],

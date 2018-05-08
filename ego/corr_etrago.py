@@ -38,7 +38,7 @@ args = {
   'db': 'oedb',
   'export': False,
   'generator_noise': True,
-  'gridversion': "v0.3.0",
+  'gridversion': "v0.3.0pre1",
   'k_mean_clustering': False,
   'line_grouping': False, # gibt warnung aus. Soll garnicht so gut sei laut Clara
   'load_shedding': True,
@@ -49,8 +49,8 @@ args = {
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
   'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
-  'reproduce_noise': 'noise_values.csv', ## Auch neu berechnen
-  'results': 'results/random_snap_test',
+  'reproduce_noise': 'noise_values.csv',
+  'results': 'results/version_test',
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
@@ -59,9 +59,9 @@ args = {
 args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
-args['end_snapshot'] = 8760
-args['comment'] = "200 random snapshots"
-args['rand_snapshots'] = 200
+args['end_snapshot'] = 24
+args['comment'] = "grid version test"
+args['rand_snapshots'] = False
 
 try:
     conn = db.connection(section='oedb')

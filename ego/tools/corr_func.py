@@ -191,3 +191,18 @@ def render_corr_table(data, col_width=3.0, row_height=0.625, font_size=12,
             cell.set_facecolor(header_color)
 
     return fig, ax
+
+def corr(X, Y):
+    """Computes the Pearson correlation coefficient and a 95% confidence
+    interval based on the data in X and Y."""
+
+    r = np.corrcoef(X, Y)[0,1]
+    f = 0.5*np.log((1+r)/(1-r))
+    se = 1/np.sqrt(len(X)-3)
+    ucl = f + 2*se
+    lcl = f - 2*se
+
+    lcl = (np.exp(2*lcl) - 1) / (np.exp(2*lcl) + 1)
+    ucl = (np.exp(2*ucl) - 1) / (np.exp(2*ucl) + 1)
+
+    return r,lcl,ucl
