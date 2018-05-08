@@ -49,7 +49,7 @@ args = {
   'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
   'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
   'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
-  'reproduce_noise': 'noise_values.csv',
+  'reproduce_noise': False,
   'results': 'results/version_test',
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
