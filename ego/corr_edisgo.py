@@ -51,9 +51,9 @@ network_logger.addHandler(fh)
 
 #Inputs
 ding0_files = 'data/ding0_grids'
-result_id = 395
+result_id = 1
 add_results = False
-random_mv_grids = 20
+random_mv_grids = 3
 
 ## Connection
 try:
@@ -118,29 +118,6 @@ bus_id_df = pd.DataFrame(query.all(),
                                query.column_descriptions])
 
 n_buses = len(bus_id_df)
-
-
-## Grid selection
-#try:
-#    query = session.query(
-#            ormclass_result_bus.bus_id,
-#            ormclass_hvmv_subst.subst_id
-#            ).join(
-#                    ormclass_hvmv_subst,
-#                    ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id
-#                    ).filter(
-#                            ormclass_result_bus.result_id == result_id,
-#                            ormclass_hvmv_subst.version == grid_version)
-#
-#    etrago_bus_df = pd.DataFrame(query.all(),
-#                          columns=[column['name'] for
-#                                   column in
-#                                   query.column_descriptions])
-#
-#
-#    n_buses = len(etrago_bus_df)
-#except:
-#    logger.error('Failed retrieve etrago buses',  exc_info=True)
 
 # Start eDisgo
 logger.info('eDisGo with result_id: ' + str(result_id))

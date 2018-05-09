@@ -55,12 +55,12 @@ def get_etragospecs_from_db(session,
     print('Grid Version:')
     print(grid_version)
 
-    if grid_version == None:
-        prefix = 'EgoGridPfHv'
-    else:
-        prefix = 'EgoPfHv'
-
-    schema = model_draft if grid_version is None else grid
+#    if grid_version == None:
+#        prefix = 'EgoGridPfHv'
+#    else:
+#        prefix = 'EgoPfHv'
+#
+#    schema = model_draft if grid_version is None else grid
 
 
     # Mapping
@@ -75,7 +75,8 @@ def get_etragospecs_from_db(session,
     #ormclass_result_load_t = model_draft.__getattribute__('EgoGridPfHvResultLoadT')
     ormclass_result_stor = model_draft.__getattribute__('EgoGridPfHvResultStorage')
     ormclass_result_stor_t = model_draft.__getattribute__('EgoGridPfHvResultStorageT')
-    ormclass_source = schema.__getattribute__(prefix + 'Source')
+    ormclass_source = model_draft.__getattribute__('EgoGridPfHvSource')
+#    ormclass_source = schema.__getattribute__(prefix + 'Source')
 #    ormclass_aggr_w = model_draft.__getattribute__('EgoSupplyAggrWeather')
 
     # Meta Queries
@@ -120,8 +121,8 @@ def get_etragospecs_from_db(session,
                         ).filter(
                                 ormclass_result_gen.bus == bus_id,
                                 ormclass_result_gen.result_id == result_id,
-                                ormclass_source.name.notin_(weather_dpdnt),
-                                ormclass_source.version == grid_version)
+                                ormclass_source.name.notin_(weather_dpdnt))
+#                                ormclass_source.version == grid_version)
 
         conv_df = pd.DataFrame(query.all(),
                               columns=[column['name'] for
@@ -181,8 +182,8 @@ def get_etragospecs_from_db(session,
                                 ).filter(
                                 ormclass_result_gen.bus == bus_id,
                                 ormclass_result_gen.result_id == result_id,
-                                ormclass_source.name.in_(weather_dpdnt),
-                                ormclass_source.version == grid_version)#,
+                                ormclass_source.name.in_(weather_dpdnt))
+#                                ormclass_source.version == grid_version)#,
 #                                ormclass_aggr_w.scn_name == scn_name)
 
         ren_df = pd.DataFrame(query.all(),
@@ -281,8 +282,8 @@ def get_etragospecs_from_db(session,
                         ).filter(
                                 ormclass_result_stor.bus == bus_id,
                                 ormclass_result_stor.result_id == result_id,
-                                ormclass_source.name == 'extendable_storage',
-                                ormclass_source.version == grid_version)
+                                ormclass_source.name == 'extendable_storage')
+#                                ormclass_source.version == grid_version)
 
         stor_df = pd.DataFrame(query.all(),
                               columns=[column['name'] for
