@@ -59,9 +59,9 @@ args = {
 args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
-args['end_snapshot'] = 2
+args['end_snapshot'] = 12
 args['comment'] = "grid version test"
-args['rand_snapshots'] = False
+args['rand_snapshots'] = 3
 
 try:
     conn = db.connection(section='oedb')
