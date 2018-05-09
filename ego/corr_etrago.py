@@ -38,7 +38,7 @@ args = {
   'db': 'oedb',
   'export': False,
   'generator_noise': True,
-  'gridversion': "v0.3.0",
+  'gridversion': "v0.3.0pre1",
   'k_mean_clustering': False,
   'line_grouping': False, # gibt warnung aus. Soll garnicht so gut sei laut Clara
   'load_shedding': True,
