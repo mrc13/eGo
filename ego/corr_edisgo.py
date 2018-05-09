@@ -196,9 +196,9 @@ for idx, row in bus_id_df.iterrows():
     try:
         if scn_name == 'NEP 2035':
             logger.info('Importing Generators')
-            network.import_generators(types=['wind', 'solar']) ## Check which generators can be imported (CHP, biomass (gas))
+            network.import_generators()
 
-        network.analyze()
+        network.analyze(mode='mv')
 
     except:
         logger.error('No Generators imported or Network could not be analyzed',  exc_info=True)
