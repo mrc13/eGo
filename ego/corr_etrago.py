@@ -49,9 +49,9 @@ args = {
   'snapshot_clustering':False,
   'parallelisation': False,
   'pf_post_lopf': False,
-  'reproduce_noise': 'noise_values.csv',
+  'reproduce_noise': False,
   'results': 'results/version_test',
-  'scn_name': 'NEP 2035',
+  'scn_name': 'Status Quo',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
@@ -59,7 +59,7 @@ args = {
 args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
-args['end_snapshot'] = 3
+args['end_snapshot'] = 2
 args['comment'] = "grid version test"
 args['rand_snapshots'] = False
 
