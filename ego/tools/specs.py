@@ -43,17 +43,17 @@ def get_etragospecs_from_db(session,
     specs_meta_data.update({'TG Bus ID':bus_id})
     specs_meta_data.update({'Result ID':result_id})
 
-    settings = get_settings_from_result_id(session, result_id)
-    grid_version = settings['gridversion']
-    specs_meta_data.update({'Grid Version':grid_version})
-    if grid_version == 'None':
-        grid_version = None
-
-    if grid_version == None:
-        raise NotImplementedError("To be implemented")
-
-    print('Grid Version:')
-    print(grid_version)
+#    settings = get_settings_from_result_id(session, result_id)
+#    grid_version = settings['gridversion']
+#    specs_meta_data.update({'Grid Version':grid_version})
+#    if grid_version == 'None':
+#        grid_version = None
+#
+#    if grid_version == None:
+#        raise NotImplementedError("To be implemented")
+#
+#    print('Grid Version:')
+#    print(grid_version)
 
 #    if grid_version == None:
 #        prefix = 'EgoGridPfHv'

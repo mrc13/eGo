@@ -198,7 +198,7 @@ for idx, row in bus_id_df.iterrows():
             logger.info('Importing Generators')
             network.import_generators()
 
-        network.analyze(mode='mv')
+        network.analyze()#mode='mv')
 
     except:
         logger.error('No Generators imported or Network could not be analyzed',  exc_info=True)
