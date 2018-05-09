@@ -40,16 +40,16 @@ args = {
   'generator_noise': True,
   'gridversion': "v0.3.0pre1",
   'k_mean_clustering': False,
-  'line_grouping': False, # gibt warnung aus. Soll garnicht so gut sei laut Clara
+  'line_grouping': False,
   'load_shedding': True,
   'lpfile': False,
   'method': 'lopf',
   'minimize_loading': False,
   'network_clustering': False,
-  'snapshot_clustering':False, ## evtl. snapshot clustering noch. ausprobieren
-  'parallelisation': False, # This is OK in my case cause no storage optimization. Macht alles nacheinander
-  'pf_post_lopf': False, # Weitere Möglichkeit sind noch solver options
-  'reproduce_noise': False,
+  'snapshot_clustering':False,
+  'parallelisation': False,
+  'pf_post_lopf': False,
+  'reproduce_noise': 'noise_values.csv',
   'results': 'results/version_test',
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
@@ -59,7 +59,7 @@ args = {
 args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
-args['end_snapshot'] = 24
+args['end_snapshot'] = 3
 args['comment'] = "grid version test"
 args['rand_snapshots'] = False
 
@@ -94,20 +94,6 @@ if ans == 'y':
     except:
         logger.error('Could not save Results to DB',  exc_info=True)
 
-
-ans = str(input("Want to update s_nom in results (y/n)? "))
-if ans == 'y':
-    result_id = str(input("Please type the result_id: "))
-    scn_name = get_scn_name_from_result_id(session, result_id)
-    session.execute('''
-    UPDATE model_draft.ego_grid_pf_hv_result_line as lr
-        SET s_nom = (SELECT s_nom
-                         FROM model_draft.ego_grid_pf_hv_line as l
-                         WHERE   scn_name = :scn_name AND
-                                 l.line_id = lr.line_id)
-        WHERE result_id = :result_id;
-    ''', {'result_id': result_id, 'scn_name': scn_name})
-    session.commit()
 
 
 

@@ -5,7 +5,7 @@ import pandas as pd
 import time
 if not 'READTHEDOCS' in os.environ:
     from sqlalchemy import distinct
-    from egoio.db_tables import model_draft # This gives me the specific ORM classes.
+    from egoio.db_tables import model_draft, grid # This gives me the specific ORM classes.
     from edisgo.grid.network import ETraGoSpecs
 
 import logging # ToDo: Logger should be set up more specific
@@ -43,6 +43,25 @@ def get_etragospecs_from_db(session,
     specs_meta_data.update({'TG Bus ID':bus_id})
     specs_meta_data.update({'Result ID':result_id})
 
+    settings = get_settings_from_result_id(session, result_id)
+    grid_version = settings['gridversion']
+    specs_meta_data.update({'Grid Version':grid_version})
+    if grid_version == 'None':
+        grid_version = None
+
+    if grid_version == None:
+        raise NotImplementedError("To be implemented")
+
+    print('Grid Version:')
+    print(grid_version)
+
+    if grid_version == None:
+        prefix = 'EgoGridPfHv'
+    else:
+        prefix = 'EgoPfHv'
+
+    schema = model_draft if grid_version is None else grid
+
 
     # Mapping
     ormclass_result_meta = model_draft.__getattribute__('EgoGridPfHvResultMeta')
@@ -56,9 +75,9 @@ def get_etragospecs_from_db(session,
     #ormclass_result_load_t = model_draft.__getattribute__('EgoGridPfHvResultLoadT')
     ormclass_result_stor = model_draft.__getattribute__('EgoGridPfHvResultStorage')
     ormclass_result_stor_t = model_draft.__getattribute__('EgoGridPfHvResultStorageT')
-    ormclass_source = model_draft.__getattribute__('EgoGridPfHvSource')
-    ormclass_aggr_w = model_draft.__getattribute__('EgoSupplyAggrWeather')
- 
+    ormclass_source = schema.__getattribute__(prefix + 'Source')
+#    ormclass_aggr_w = model_draft.__getattribute__('EgoSupplyAggrWeather')
+
     # Meta Queries
     ## Check
 
@@ -78,19 +97,19 @@ def get_etragospecs_from_db(session,
                     )
 
     scn_name = get_scn_name_from_result_id(session, result_id)
-    
-    
+
+
     specs_meta_data.update({'scn_name':scn_name})
 
     # Generators
-    
+
     try:
         t0 = time.perf_counter()
         weather_dpdnt = ['wind','solar']
     ## Conventionals
         t1 = time.perf_counter()
         performance.update({'Generator Data Processing':t1-t0})
-        
+
         query = session.query(
                 ormclass_result_gen.generator_id, # This ID is an aggregate ID (single generators aggregated)
                 ormclass_result_gen.p_nom,
@@ -101,7 +120,8 @@ def get_etragospecs_from_db(session,
                         ).filter(
                                 ormclass_result_gen.bus == bus_id,
                                 ormclass_result_gen.result_id == result_id,
-                                ormclass_source.name.notin_(weather_dpdnt))
+                                ormclass_source.name.notin_(weather_dpdnt),
+                                ormclass_source.version == grid_version)
 
         conv_df = pd.DataFrame(query.all(),
                               columns=[column['name'] for
@@ -109,6 +129,8 @@ def get_etragospecs_from_db(session,
                                        query.column_descriptions])
 
         conv_cap = conv_df[['p_nom','name']].groupby('name').sum().T
+        print('Conventional Capacity:')
+        print(conv_cap)
 
         query = session.query(
                     ormclass_result_gen_t.generator_id,
@@ -142,30 +164,34 @@ def get_etragospecs_from_db(session,
         t2 = time.perf_counter()
         performance.update({'Conventional Dispatch':t2-t1})
     ### Capacities
-         
+
         query = session.query(
                 ormclass_result_gen.generator_id,
                 ormclass_result_gen.p_nom,
                 ormclass_result_gen.p_nom_opt,
-                ormclass_source.name,
-                ormclass_aggr_w.w_id
+                ormclass_source.name
+                # ormclass_aggr_w.w_id
                 ).join(
                         ormclass_source,
                         ormclass_source.source_id == ormclass_result_gen.source
-                                ).join(
-                                        ormclass_aggr_w,
-                                        ormclass_aggr_w.aggr_id == ormclass_result_gen.generator_id
-                                        
+#                                ).join(
+#                                        ormclass_aggr_w,
+#                                        ormclass_aggr_w.aggr_id == ormclass_result_gen.generator_id
+
                                 ).filter(
                                 ormclass_result_gen.bus == bus_id,
                                 ormclass_result_gen.result_id == result_id,
                                 ormclass_source.name.in_(weather_dpdnt),
-                                ormclass_aggr_w.scn_name == scn_name)
-        
+                                ormclass_source.version == grid_version)#,
+#                                ormclass_aggr_w.scn_name == scn_name)
+
         ren_df = pd.DataFrame(query.all(),
                               columns=[column['name'] for
                                        column in
                                        query.column_descriptions])
+
+        print(ren_df)
+        ren_df['w_id'] = 1    ## This is a very temporary hack for versioning!!!
 
         aggr_gens = ren_df.groupby([
                 'name',
@@ -176,6 +202,8 @@ def get_etragospecs_from_db(session,
 
         aggr_gens['ren_id'] = aggr_gens.index
 
+        print('Renewable Capacity:')
+        print(aggr_gens)
     ### Dispatch and Curteilment
 
         query = session.query(
@@ -253,7 +281,8 @@ def get_etragospecs_from_db(session,
                         ).filter(
                                 ormclass_result_stor.bus == bus_id,
                                 ormclass_result_stor.result_id == result_id,
-                                ormclass_source.name == 'extendable_storage')
+                                ormclass_source.name == 'extendable_storage',
+                                ormclass_source.version == grid_version)
 
         stor_df = pd.DataFrame(query.all(),
                               columns=[column['name'] for
@@ -331,19 +360,19 @@ def get_etragospecs_from_db(session,
     # logger.info(specs_meta_data)
     t5 = time.perf_counter()
     performance.update({'Overall time':t5-t0})
-    
+
 #    print("\n Conventional Dispatch (Normalized): \n",
-#      conv_dsptch_norm, 
+#      conv_dsptch_norm,
 #      "\n\n Renewable Generators: \n",
 #      aggr_gens,
 #      "\n\n Renewable Dispatch: \n",
 #      dispatch,
 #      "\n\n Renewable Curtailment: \n",
 #      curtailment, "\n\n")
-    
-    for keys,values in performance.items():
-        print(keys, ": ", values)
-        
+
+#    for keys,values in performance.items():
+#        print(keys, ": ", values)
+
     return specs
 
 
@@ -360,7 +389,7 @@ def get_etragospecs_direct(session,
         Oemof session object (Database Interface)
     bus_id : int
         ID of the corresponding HV bus
-    eTraGo : :class:`~.` #Todo: Add class etc....    
+    eTraGo : :class:`~.` #Todo: Add class etc....
 
 
     Returns
@@ -369,19 +398,19 @@ def get_etragospecs_direct(session,
         eDisGo ETraGoSpecs Object
 
     """
-    
+
     print("\nSpecs Direct")
     specs_meta_data = {}
     performance = {}
 
     specs_meta_data.update({'TG Bus ID':bus_id})
-   
+
     ormclass_result_meta = model_draft.__getattribute__('EgoGridPfHvResultMeta')
     ormclass_aggr_w = model_draft.__getattribute__('EgoSupplyAggrWeather')
     ormclass_source = model_draft.__getattribute__('EgoGridPfHvSource')
-    
+
     snap_idx =  eTraGo.snapshots
-    
+
     if args['global']['recover'] == True: # If the results are beeing recovered, the scn_name cannot be used from Scenario Settings File
         result_id = args['global']['result_id']
         scn_name = session.query(
@@ -389,27 +418,27 @@ def get_etragospecs_direct(session,
                 ).filter(
                 ormclass_result_meta.result_id == result_id
                 ).scalar(
-                        ) 
+                        )
     else:
         scn_name = args['eTraGo']['scn_name']
     specs_meta_data.update({'scn_name':scn_name})
-    
+
     if scn_name == 'SH Status Quo':
-        scn_name = 'Status Quo' 
-    
+        scn_name = 'Status Quo'
+
     # Generators
     t0 = time.perf_counter()
-    
+
     weather_dpdnt = ['wind','solar']
- 
+
     ## DF procesing
     all_gens_df = eTraGo.generators[eTraGo.generators['bus'] == str(bus_id)]
     all_gens_df.reset_index(inplace=True)
     all_gens_df = all_gens_df.rename(columns={'index':'generator_id'})
     all_gens_df = all_gens_df[['generator_id', 'p_nom', 'p_nom_opt', 'carrier']]
-    
+
     names = []
-    for index, row in all_gens_df.iterrows():  
+    for index, row in all_gens_df.iterrows():
         carrier = row['carrier']
         name = session.query(
                     ormclass_source.name
@@ -417,20 +446,20 @@ def get_etragospecs_direct(session,
                                 ormclass_source.source_id == carrier
                                 ).scalar(
                                         )
-        
+
         names.append(name)
-            
+
     all_gens_df['name'] = names
     all_gens_df = all_gens_df.drop(['carrier'], axis=1)
-    
-    
+
+
     ## Conventionals
     t1 = time.perf_counter()
     performance.update({'Generator Data Processing':t1-t0})
-    
+
     conv_df = all_gens_df[~all_gens_df.name.isin(weather_dpdnt)]
     conv_cap = conv_df[['p_nom','name']].groupby('name').sum().T
-    
+
     conv_dsptch_norm = pd.DataFrame(0.0,
                                index=snap_idx,
                                columns=list(set(conv_df['name'])))
@@ -441,30 +470,30 @@ def get_etragospecs_direct(session,
         p = eTraGo.generators_t.p[str(generator_id)]
         p_norm = p / conv_cap[source]['p_nom']
         conv_dsptch_norm[source] = conv_dsptch_norm[source] + p_norm
-        
+
     ## Renewables
     t2 = time.perf_counter()
     performance.update({'Conventional Dispatch':t2-t1})
     ### Capacities
     ren_df = all_gens_df[all_gens_df.name.isin(weather_dpdnt)]
-    
+
     w_ids = []
-    for index, row in ren_df.iterrows():  
+    for index, row in ren_df.iterrows():
         aggr_id = row['generator_id']
         w_id = session.query(
                     ormclass_aggr_w.w_id
                         ).filter(
                                 ormclass_aggr_w.aggr_id == aggr_id,
-                                ormclass_aggr_w.scn_name == scn_name 
+                                ormclass_aggr_w.scn_name == scn_name
                                 ).scalar(
                                         )
-        
+
         w_ids.append(w_id)
-    
-      
+
+
     ren_df = ren_df.assign(w_id=pd.Series(w_ids, index=ren_df.index))
     ren_df.dropna(inplace=True) ##This should be unnecessary (and I think it isnt)
-    
+
     aggr_gens = ren_df.groupby([
             'name',
             'w_id'
@@ -480,7 +509,7 @@ def get_etragospecs_direct(session,
                             columns=aggr_gens['ren_id'])
     curtailment = pd.DataFrame(0.0,
                             index=snap_idx,
-                            columns=aggr_gens['ren_id'])        
+                            columns=aggr_gens['ren_id'])
 
     for index, row in ren_df.iterrows():
         gen_id = row['generator_id']
@@ -492,18 +521,18 @@ def get_etragospecs_direct(session,
 
         p_nom_aggr = float(aggr_gens[aggr_gens['ren_id'] == ren_id]['p_nom_aggr'])
         p_nom = float(ren_df[ren_df['generator_id'] == gen_id]['p_nom'])
-        
+
         p_series = eTraGo.generators_t.p[str(gen_id)]
         p_norm_tot_series = p_series / p_nom_aggr
 
         p_max_pu_series = eTraGo.generators_t.p_max_pu[str(gen_id)]
         p_max_norm_tot_series = p_max_pu_series * p_nom / p_nom_aggr
-    
+
         p_curt_norm_tot_series = p_max_norm_tot_series - p_norm_tot_series
-        
+
         dispatch[ren_id] = dispatch[ren_id] + p_norm_tot_series
         curtailment[ren_id] = curtailment[ren_id] + p_curt_norm_tot_series
-    
+
     # Storage
     t3 = time.perf_counter()
     performance.update({'Renewable Dispatch and Curt.':t3-t2})
@@ -512,14 +541,14 @@ def get_etragospecs_direct(session,
     stor_df.reset_index(inplace=True)
     stor_df = stor_df.rename(columns={'index':'storage_id'})
     stor_df = stor_df[[
-            'storage_id', 
-            'p_nom_opt', 
+            'storage_id',
+            'p_nom_opt',
             'p_nom',
             'max_hours',
             'carrier']]
-    
+
     names = []
-    for index, row in stor_df.iterrows():  
+    for index, row in stor_df.iterrows():
         carrier = row['carrier']
         name = session.query(
                     ormclass_source.name
@@ -527,14 +556,14 @@ def get_etragospecs_direct(session,
                                 ormclass_source.source_id == carrier
                                 ).scalar(
                                         )
-        
+
         names.append(name)
-            
+
     stor_df = stor_df.assign(name=pd.Series(names, index=stor_df.index))
     stor_df = stor_df.drop(['carrier'], axis=1)
-    
+
     stor_df['capacity_MWh'] = stor_df['p_nom_opt'] * stor_df['max_hours']
-       
+
     count_bat = 0
     for index, row in stor_df.iterrows():
         if row['max_hours'] >= 20.0:
@@ -542,7 +571,7 @@ def get_etragospecs_direct(session,
         else:
             stor_df.at[index, 'name'] = 'battery' # ToDo: find a more generic solution
             count_bat += 1
-    
+
 ### Project Specific Battery Capacity
     battery_capacity = 0.0 # MWh
     for index, row in stor_df.iterrows():
@@ -550,7 +579,7 @@ def get_etragospecs_direct(session,
             battery_capacity = battery_capacity + row['capacity_MWh']
 
  ### Project Specific Battery Active Power
-    battery_active_power = pd.Series(0.0, index = snap_idx)       
+    battery_active_power = pd.Series(0.0, index = snap_idx)
     for index, row in stor_df.iterrows():
         name = row['name']
         stor_id = row['storage_id']
@@ -569,44 +598,44 @@ def get_etragospecs_direct(session,
 
                         renewables=aggr_gens,
                         ren_dispatch=dispatch,
-                        ren_curtailment=curtailment) 
-    
+                        ren_curtailment=curtailment)
+
     t5 = time.perf_counter()
     performance.update({'Overall time':t5-t0})
-        
+
     #print(performance)
 
     print("\n Conventional Dispatch (Normalized): \n",
-          conv_dsptch_norm, 
+          conv_dsptch_norm,
           "\n\n Renewable Generators: \n",
           aggr_gens,
           "\n\n Renewable Dispatch: \n",
           dispatch,
           "\n\n Renewable Curtailment: \n",
           curtailment, "\n\n")
-#    
+#
 #    for keys,values in performance.items():
 #        print(keys, ": ", values)
- 
+
     return specs
 
+## not adapted to grid yet....
+#def get_mvgrid_from_bus_id(session,
+#                            bus_id):
+#    # Mapping
+#    ormclass_hvmv_subst = model_draft.__getattribute__('EgoGridHvmvSubstation')
+#    subst_id = session.query(
+#            ormclass_hvmv_subst.subst_id
+#            ).filter(
+#            ormclass_hvmv_subst.otg_id == bus_id
+#            ).scalar(
+#                    )
+#    #ToDo Check if subst_id is really the mv grid ID
+#    # Anyway, this should be adapted by Dingo
+#    return subst_id
 
-def get_mvgrid_from_bus_id(session,
-                            bus_id):    
-    # Mapping
-    ormclass_hvmv_subst = model_draft.__getattribute__('EgoGridHvmvSubstation')
-    subst_id = session.query(
-            ormclass_hvmv_subst.subst_id
-            ).filter(
-            ormclass_hvmv_subst.otg_id == bus_id
-            ).scalar(
-                    )
-    #ToDo Check if subst_id is really the mv grid ID
-    # Anyway, this should be adapted by Dingo
-    return subst_id
- 
 def get_scn_name_from_result_id (session, result_id):
-     
+
     ormclass_result_meta = model_draft.__getattribute__('EgoGridPfHvResultMeta')
     scn_name = session.query(
             ormclass_result_meta.scn_name
@@ -615,6 +644,20 @@ def get_scn_name_from_result_id (session, result_id):
             ).scalar(
                     )
     if scn_name == 'SH Status Quo':
-        scn_name = 'Status Quo' 
-    
-    return scn_name  
+        scn_name = 'Status Quo'
+
+    return scn_name
+
+def get_settings_from_result_id (session, result_id):
+
+    ormclass_result_meta = model_draft.__getattribute__('EgoGridPfHvResultMeta')
+    settings = session.query(
+            ormclass_result_meta.settings
+            ).filter(
+            ormclass_result_meta.result_id == result_id
+            ).scalar(
+                    )
+    set_dict = {}
+    for entry in settings:
+        set_dict[entry[0]] = entry[1]
+    return set_dict

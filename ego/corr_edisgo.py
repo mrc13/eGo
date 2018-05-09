@@ -9,20 +9,25 @@ __author__ = "maltesc"
 
 
 ## Local Packages
-from ego.tools.specs import get_etragospecs_from_db, get_mvgrid_from_bus_id, get_scn_name_from_result_id
+from ego.tools.specs import (
+        get_etragospecs_from_db,
+        get_scn_name_from_result_id,
+        get_settings_from_result_id)
 from ego.tools import corr_io
 
 ## Project Packages
 from edisgo.grid.network import Network, Scenario
 from egoio.tools import db
-from egoio.db_tables import model_draft
+from egoio.db_tables import model_draft, grid
 
 ## General Packages
+import os
 import pandas as pd
 from shapely.geometry import LineString
 import geoalchemy2.shape as shape
 from sqlalchemy.orm import sessionmaker
 import os.path
+from random import randint
 
 from math import sqrt, pi
 
@@ -46,16 +51,11 @@ network_logger.addHandler(fh)
 
 #Inputs
 ding0_files = 'data/ding0_grids'
-result_id = 384
-add_results = True
+result_id = 395
+add_results = False
+random_mv_grids = 20
 
-## Mapping
-mv_lines = corr_io.corr_mv_lines_results
-mv_buses = corr_io.corr_mv_bus_results
-ormclass_result_bus = model_draft.EgoGridPfHvResultBus
-ormclass_hvmv_subst = model_draft.EgoGridHvmvSubstation
-
-## Connection and implicit mapping
+## Connection
 try:
     conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
@@ -63,9 +63,86 @@ try:
 except:
     logger.error('Failed connection to Database',  exc_info=True)
 
+
+settings = get_settings_from_result_id(session, result_id)
+grid_version = settings['gridversion']
+
+if grid_version == 'None':
+    grid_version = None
+
+if grid_version == None:
+    raise NotImplementedError("To be implemented")
+
+print('Grid Version:')
+print(grid_version)
+
+schema = model_draft if grid_version is None else grid
+
+## Mapping
+mv_lines = corr_io.corr_mv_lines_results
+mv_buses = corr_io.corr_mv_bus_results
+ormclass_result_bus = model_draft.EgoGridPfHvResultBus
+ormclass_hvmv_subst = schema.EgoDpHvmvSubstation
+
+mv_grids = []
+for file in os.listdir(ding0_files):
+    if file.endswith('.pkl'):
+        mv_grids.append(
+                int(file.replace('ding0_grids__', '').replace('.pkl', '')))
+
+chosen_idx = []
+if random_mv_grids:
+    for p in range(0,random_mv_grids):
+        choice = randint(0,len(mv_grids)-1)
+        while choice in chosen_idx:
+            print(str(choice) + ' has been chosen before - sample again...')
+            choice = randint(0,len(mv_grids)-1)
+        chosen_idx.append(choice)
+    chosen_grids = [mv_grids[i] for i in chosen_idx]
+
+    mv_grids = chosen_grids
+
+print('chosen_grids:')
+print(chosen_grids)
+
+query = session.query(
+        ormclass_hvmv_subst.subst_id,
+        ormclass_hvmv_subst.otg_id
+        ).filter(
+        ormclass_hvmv_subst.subst_id.in_(mv_grids),
+        ormclass_hvmv_subst.version == grid_version)
+
+bus_id_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+
+n_buses = len(bus_id_df)
+
+
+## Grid selection
+#try:
+#    query = session.query(
+#            ormclass_result_bus.bus_id,
+#            ormclass_hvmv_subst.subst_id
+#            ).join(
+#                    ormclass_hvmv_subst,
+#                    ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id
+#                    ).filter(
+#                            ormclass_result_bus.result_id == result_id,
+#                            ormclass_hvmv_subst.version == grid_version)
+#
+#    etrago_bus_df = pd.DataFrame(query.all(),
+#                          columns=[column['name'] for
+#                                   column in
+#                                   query.column_descriptions])
+#
+#
+#    n_buses = len(etrago_bus_df)
+#except:
+#    logger.error('Failed retrieve etrago buses',  exc_info=True)
+
 # Start eDisgo
-
-
 logger.info('eDisGo with result_id: ' + str(result_id))
 
 if add_results == False:
@@ -90,34 +167,16 @@ else:
                         mv_buses.result_id == result_id).distinct()
 
     skip_grids = [r[0] for r in query]
+    print('Skip grids:')
+    print(skip_grids)
 
 try:
     scn_name = get_scn_name_from_result_id(session, result_id) # SH Status Quo becomes Status Quo
 except:
     logger.error('Failed to get scn_name',  exc_info=True)
 
-try:
-    query = session.query(
-            ormclass_result_bus.bus_id,
-            ormclass_hvmv_subst.subst_id
-            ).join(
-                    ormclass_hvmv_subst,
-                    ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id
-                    ).filter(
-                            ormclass_result_bus.result_id == result_id)
-
-    etrago_bus_df = pd.DataFrame(query.all(),
-                          columns=[column['name'] for
-                                   column in
-                                   query.column_descriptions])
-
-
-    n_buses = len(etrago_bus_df)
-except:
-    logger.error('Failed retrieve etrago buses',  exc_info=True)
-
-for idx, row in etrago_bus_df.iterrows():
-    bus_id = row['bus_id']
+for idx, row in bus_id_df.iterrows():
+    bus_id = row['otg_id']
     mv_grid_id = row['subst_id']
     if mv_grid_id in skip_grids:
         logger.info('Bus '+ str(bus_id) + ' with MV grid ' + str(mv_grid_id) + 'skipped, because result is already in db')
