@@ -14,10 +14,12 @@ from time import localtime, strftime
 
 ## Project Packages
 from egoio.tools import db
-from egoio.db_tables import model_draft
+from egoio.db_tables import model_draft, grid
 
 ## Local Packages
-from ego.tools.specs import get_scn_name_from_result_id
+from ego.tools.specs import (
+        get_scn_name_from_result_id,
+        get_settings_from_result_id)
 from ego.tools import corr_io
 
 ## Logging
@@ -36,9 +38,8 @@ logger.addHandler(fh)
 # Mapping
 ## model_draft
 ormclass_result_meta = model_draft.EgoGridPfHvResultMeta
-ormclass_hvmv_subst = model_draft.EgoGridHvmvSubstation
+
 ormclass_result_transformer = model_draft.EgoGridPfHvResultTransformer
-ormclass_griddistricts = model_draft.EgoGridMvGriddistrict
 ormclass_result_gen = model_draft.EgoGridPfHvResultGenerator
 ormclass_result_gen_t = model_draft.EgoGridPfHvResultGeneratorT
 ormclass_result_line = model_draft.EgoGridPfHvResultLine
@@ -47,7 +48,15 @@ ormclass_result_line_t = model_draft.EgoGridPfHvResultLineT
 ormclass_result_bus_t = model_draft.EgoGridPfHvResultBusT
 ormclass_result_load = model_draft.EgoGridPfHvResultLoad
 ormclass_result_load_t = model_draft.EgoGridPfHvResultLoadT
+
 ormclass_source = model_draft.EgoGridPfHvSource
+
+## grid
+#ormclass_griddistricts = model_draft.EgoGridMvGriddistrict
+ormclass_griddistricts = grid.EgoDpMvGriddistrict
+#ormclass_hvmv_subst = model_draft.EgoGridHvmvSubstation
+ormclass_hvmv_subst = grid.EgoDpHvmvSubstation
+
 ## corr
 mv_lines = corr_io.corr_mv_lines_results
 mv_buses = corr_io.corr_mv_bus_results
@@ -71,12 +80,13 @@ session = Session()
 logger.info('Metadata')
 scn_name = get_scn_name_from_result_id(session, result_id)
 
-meta_settings = session.query( # Here also the correct brnch_fkt can be found.
-            ormclass_result_meta.settings
-            ).filter(
-            ormclass_result_meta.result_id == result_id
-            ).scalar(
-                    )
+settings = get_settings_from_result_id(session, result_id)
+grid_version = settings['gridversion']
+
+if grid_version == 'None':
+    raise NotImplementedError("To be implemented")
+
+logger.info('Grid version: ' + str(grid_version))
 
 snap_idx = session.query(
             ormclass_result_meta.snapshots
@@ -338,12 +348,16 @@ mv_trafo_df = mv_trafo_df.merge(mv_bus_df, # Only the Trafos that can actualy be
                                   how='inner')
 
 ## Merge with griddistrict geoms
-query = session.query(ormclass_griddistricts.subst_id,
-                      ormclass_griddistricts.geom)
+query = session.query(
+        ormclass_griddistricts.subst_id,
+        ormclass_griddistricts.geom
+        ).filter(ormclass_griddistricts.version == grid_version)
 mv_griddistricts_df = pd.DataFrame(query.all(),
                       columns=[column['name'] for
                                column in
                                query.column_descriptions])
+
+print(mv_griddistricts_df)
 mv_griddistricts_df = mv_griddistricts_df.set_index('subst_id')
 mv_griddistricts_df['geom'] = mv_griddistricts_df.apply(
         lambda x: to_shape(x['geom']), axis=1)

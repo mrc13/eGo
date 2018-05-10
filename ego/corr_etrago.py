@@ -60,9 +60,9 @@ args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
 args['end_snapshot'] = 8760
-args['comment'] = "NEP 2035, 200 random snapshots, gridschema"
-args['rand_snapshots'] = 200
-args['reproduce_snapshots'] = 'rand_snaps'
+args['comment'] = "NEP 2035, 24 random snapshots, gridschema"
+args['rand_snapshots'] = 24
+args['reproduce_snapshots'] = False
 
 try:
     conn = db.connection(section='oedb')
