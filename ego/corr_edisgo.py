@@ -50,8 +50,8 @@ specs_logger.addHandler(fh)
 network_logger.addHandler(fh)
 
 #Inputs
-result_id = str(input("Please type the result_id: "))
-random_mv_grids = str(input("Number of random MV grids: "))
+result_id = int(input("Please type the result_id: "))
+random_mv_grids = int(input("Number of random MV grids: "))
 
 ding0_files = 'data/ding0_grids'
 #result_id = 4
