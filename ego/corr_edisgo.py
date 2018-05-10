@@ -61,10 +61,11 @@ logger = logging.getLogger(__name__)
 #Inputs
 
 ding0_files = 'data/ding0_grids'
-result_id = 4
+result_id = 5
 add_results = True
+
+random_mv_grids = True
 reproduce_choice = 'rand_grids'
-random_mv_grids = False
 
 ## Connection
 try:
@@ -95,19 +96,19 @@ mv_buses = corr_io.corr_mv_bus_results
 ormclass_result_bus = model_draft.EgoGridPfHvResultBus
 ormclass_hvmv_subst = schema.EgoDpHvmvSubstation
 
-if reproduce_choice:
-    print('random grids are reproduced.')
-    with open (reproduce_choice, 'rb') as fp:
-        mv_grids = pickle.load(fp)
+mv_grids = []
+for file in os.listdir(ding0_files):
+    if file.endswith('.pkl'):
+        mv_grids.append(
+                int(file.replace('ding0_grids__', '').replace('.pkl', '')))
 
-else:
-    mv_grids = []
-    for file in os.listdir(ding0_files):
-        if file.endswith('.pkl'):
-            mv_grids.append(
-                    int(file.replace('ding0_grids__', '').replace('.pkl', '')))
+if random_mv_grids:
+    if reproduce_choice:
+        print('random grids are reproduced.')
+        with open (reproduce_choice, 'rb') as fp:
+            mv_grids = pickle.load(fp)
 
-    if random_mv_grids:
+    else:
         shuffle(mv_grids)
         mv_grids = mv_grids[0:random_mv_grids]
         with open('rand_grids', 'wb') as fp:
