@@ -65,7 +65,7 @@ args['rand_snapshots'] = 200
 args['reproduce_snapshots'] = False
 
 try:
-    conn = db.connection(section='malte')
+    conn = db.connection(section='oedb')
     Session = sessionmaker(bind=conn)
     session = Session()
 
