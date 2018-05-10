@@ -28,6 +28,7 @@ import geoalchemy2.shape as shape
 from sqlalchemy.orm import sessionmaker
 import os.path
 from random import randint, shuffle
+import pickle
 
 from math import sqrt, pi
 
@@ -58,13 +59,12 @@ logger = logging.getLogger(__name__)
 #pypsa_logger.addHandler(fh)
 
 #Inputs
-result_id = int(input("Please type the result_id: "))
-random_mv_grids = int(input("Number of random MV grids: "))
 
 ding0_files = 'data/ding0_grids'
-#result_id = 4
-add_results = False
-#random_mv_grids = 3
+result_id = 4
+add_results = True
+reproduce_choice = 'rand_grids'
+random_mv_grids = False
 
 ## Connection
 try:
@@ -95,14 +95,23 @@ mv_buses = corr_io.corr_mv_bus_results
 ormclass_result_bus = model_draft.EgoGridPfHvResultBus
 ormclass_hvmv_subst = schema.EgoDpHvmvSubstation
 
-mv_grids = []
-for file in os.listdir(ding0_files):
-    if file.endswith('.pkl'):
-        mv_grids.append(
-                int(file.replace('ding0_grids__', '').replace('.pkl', '')))
+if reproduce_choice:
+    print('random grids are reproduced.')
+    with open (reproduce_choice, 'rb') as fp:
+        mv_grids = pickle.load(fp)
 
-shuffle(mv_grids)
-mv_grids = mv_grids[0:random_mv_grids]
+else:
+    mv_grids = []
+    for file in os.listdir(ding0_files):
+        if file.endswith('.pkl'):
+            mv_grids.append(
+                    int(file.replace('ding0_grids__', '').replace('.pkl', '')))
+
+    if random_mv_grids:
+        shuffle(mv_grids)
+        mv_grids = mv_grids[0:random_mv_grids]
+        with open('rand_grids', 'wb') as fp:
+            pickle.dump(mv_grids, fp)
 
 #chosen_idx = []
 #if random_mv_grids:
