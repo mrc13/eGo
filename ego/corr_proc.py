@@ -7,7 +7,7 @@ Corr Processing
 from sqlalchemy.orm import sessionmaker
 import pandas as pd
 from geoalchemy2.shape import to_shape
-import numpy as np
+#import numpy as np
 import os
 from time import localtime, strftime
 
@@ -40,6 +40,7 @@ logger.addHandler(fh)
 ormclass_result_meta = model_draft.EgoGridPfHvResultMeta
 
 ormclass_result_transformer = model_draft.EgoGridPfHvResultTransformer
+ormclass_result_transformer_t = model_draft.EgoGridPfHvResultTransformerT
 ormclass_result_gen = model_draft.EgoGridPfHvResultGenerator
 ormclass_result_gen_t = model_draft.EgoGridPfHvResultGeneratorT
 ormclass_result_line = model_draft.EgoGridPfHvResultLine
@@ -208,23 +209,38 @@ load_df = pd.DataFrame(query.all(),
 load_df = load_df.set_index('load_id')
 load_df.to_csv(result_dir + 'load_df.csv', encoding='utf-8')
 
+#%% All hvmv Substations
+logger.info('All hvmv Substations')
+query = session.query(
+        ormclass_result_bus.bus_id,
+        ormclass_hvmv_subst.subst_id
+        ).join(
+                ormclass_hvmv_subst,
+                ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id
+                ).filter(
+                        ormclass_result_bus.result_id == result_id,
+                        ormclass_hvmv_subst.version == grid_version)
+
+all_hvmv_subst_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+
+all_hvmv_subst_df.to_csv(result_dir + 'all_hvmv_subst_df.csv', encoding='utf-8')
+
 #%% Buses
 logger.info('Buses')
+
 query = session.query(
         ormclass_result_bus.bus_id,
         ormclass_result_bus.v_nom,
         ormclass_result_bus.geom,
         ormclass_result_bus_t.p,
-        ormclass_result_bus_t.v_ang,
-        ormclass_hvmv_subst.subst_id.label('MV_grid_id')
+        ormclass_result_bus_t.v_ang
         ).join(
                 ormclass_result_bus_t,
                 ormclass_result_bus_t.bus_id == ormclass_result_bus.bus_id
-                ).join(
-                        ormclass_hvmv_subst,
-                        ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id,
-                        isouter=True
-                        ).filter(
+                ).filter(
                 ormclass_result_bus.result_id == result_id,
                 ormclass_result_bus_t.result_id == result_id)
 
@@ -234,6 +250,12 @@ bus_df = pd.DataFrame(query.all(),
                                query.column_descriptions])
 
 bus_df = bus_df.set_index('bus_id')
+
+bus_df = bus_df.merge(
+        all_hvmv_subst_df.set_index('bus_id'),
+        left_index=True,
+        right_index=True,
+        how='left')
 
 bus_df['geom'] = bus_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
@@ -299,15 +321,27 @@ query = session.query(
         ormclass_result_transformer.trafo_id,
         ormclass_result_transformer.bus0,
         ormclass_result_transformer.bus1,
-        ormclass_result_transformer.geom
-        ).filter(
-                ormclass_result_transformer.result_id == result_id)
+        ormclass_result_transformer.s_nom,
+        ormclass_result_transformer.geom,
+        ormclass_result_transformer_t.p0
+        ).join(
+                ormclass_result_transformer_t,
+                ormclass_result_transformer_t.trafo_id == ormclass_result_transformer.trafo_id
+                ).filter(
+                ormclass_result_transformer.result_id == result_id,
+                ormclass_result_transformer_t.result_id == result_id)
 
 trafo_df = pd.DataFrame(query.all(),
                       columns=[column['name'] for
                                column in
                                query.column_descriptions])
 trafo_df = trafo_df.set_index('trafo_id')
+
+trafo_df['s'] = trafo_df.apply(
+        lambda x: [abs(number) for number in x['p0']], axis=1) # This is correct, since in lopf no losses.
+
+trafo_df['s_rel'] = trafo_df.apply(
+        lambda x: [s/float(x['s_nom']) for s in x['s']], axis=1)
 
 trafo_df['geom'] = trafo_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
@@ -328,7 +362,9 @@ trafo_df['grid_buffer'] = trafo_df.apply(
 query = session.query(
         ormclass_hvmv_subst.point,
         ormclass_hvmv_subst.subst_id,
-        ormclass_hvmv_subst.otg_id)
+        ormclass_hvmv_subst.otg_id
+        ).filter(ormclass_hvmv_subst.version == grid_version)
+
 mv_trafo_df = pd.DataFrame(query.all(),
                       columns=[column['name'] for
                                column in
@@ -357,7 +393,6 @@ mv_griddistricts_df = pd.DataFrame(query.all(),
                                column in
                                query.column_descriptions])
 
-print(mv_griddistricts_df)
 mv_griddistricts_df = mv_griddistricts_df.set_index('subst_id')
 mv_griddistricts_df['geom'] = mv_griddistricts_df.apply(
         lambda x: to_shape(x['geom']), axis=1)
@@ -373,20 +408,4 @@ del mv_griddistricts_df
 trafo_df.to_csv(result_dir + 'trafo_df.csv', encoding='utf-8')
 mv_trafo_df.to_csv(result_dir + 'mv_trafo_df.csv', encoding='utf-8')
 
-#%% All hvmv Substations
-logger.info('All hvmv Substations')
-query = session.query(
-        ormclass_result_bus.bus_id,
-        ormclass_hvmv_subst.subst_id
-        ).join(
-                ormclass_hvmv_subst,
-                ormclass_hvmv_subst.otg_id == ormclass_result_bus.bus_id
-                ).filter(
-                        ormclass_result_bus.result_id == result_id)
 
-all_hvmv_subst_df = pd.DataFrame(query.all(),
-                      columns=[column['name'] for
-                               column in
-                               query.column_descriptions])
-
-all_hvmv_subst_df.to_csv(result_dir + 'all_hvmv_subst_df.csv', encoding='utf-8')
