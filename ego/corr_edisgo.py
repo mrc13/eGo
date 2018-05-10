@@ -27,27 +27,35 @@ from shapely.geometry import LineString
 import geoalchemy2.shape as shape
 from sqlalchemy.orm import sessionmaker
 import os.path
-from random import randint
+from random import randint, shuffle
 
 from math import sqrt, pi
 
 import logging
 
 ## Logging
-logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s %(levelname)-8s %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    filename='corr_edisgo.log', filemode='a')
+
+#logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
+#
 logger = logging.getLogger(__name__)
-specs_logger = logging.getLogger('specs')
-network_logger = logging.getLogger('network')
-
-fh = logging.FileHandler('corr_edisgo.log', mode='w')
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-
-logger.addHandler(fh)
-specs_logger.addHandler(fh)
-network_logger.addHandler(fh)
+#specs_logger = logging.getLogger('specs')
+#network_logger = logging.getLogger('network')
+#pypsa_logger = logging.getLogger('pypsa.pf')
+#
+#fh = logging.FileHandler('corr_edisgo.log', mode='w')
+#fh.setLevel(logging.INFO)
+#formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+#fh.setFormatter(formatter)
+#
+#logger.addHandler(fh)
+#specs_logger.addHandler(fh)
+#network_logger.addHandler(fh)
+#pypsa_logger.addHandler(fh)
 
 #Inputs
 result_id = int(input("Please type the result_id: "))
@@ -93,20 +101,23 @@ for file in os.listdir(ding0_files):
         mv_grids.append(
                 int(file.replace('ding0_grids__', '').replace('.pkl', '')))
 
-chosen_idx = []
-if random_mv_grids:
-    for p in range(0,random_mv_grids):
-        choice = randint(0,len(mv_grids)-1)
-        while choice in chosen_idx:
-            print(str(choice) + ' has been chosen before - sample again...')
-            choice = randint(0,len(mv_grids)-1)
-        chosen_idx.append(choice)
-    chosen_grids = [mv_grids[i] for i in chosen_idx]
+shuffle(mv_grids)
+mv_grids = mv_grids[0:random_mv_grids]
 
-    mv_grids = chosen_grids
+#chosen_idx = []
+#if random_mv_grids:
+#    for p in range(0,random_mv_grids):
+#        choice = randint(0,len(mv_grids)-1)
+#        while choice in chosen_idx:
+#            print(str(choice) + ' has been chosen before - sample again...')
+#            choice = randint(0,len(mv_grids)-1)
+#        chosen_idx.append(choice)
+#    chosen_grids = [mv_grids[i] for i in chosen_idx]
+#
+#    mv_grids = chosen_grids
 
 print('chosen_grids:')
-print(chosen_grids)
+print(mv_grids)
 
 query = session.query(
         ormclass_hvmv_subst.subst_id,
