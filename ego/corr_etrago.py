@@ -51,7 +51,7 @@ args = {
   'pf_post_lopf': False,
   'reproduce_noise': False,
   'results': 'results/version_test',
-  'scn_name': 'NEP 2035',
+  'scn_name': 'Status Quo',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
@@ -60,9 +60,9 @@ args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
 args['end_snapshot'] = 8760
-args['comment'] = "NEP 2035, 200 random snapshots, gridschema"
-args['rand_snapshots'] = 200
-args['reproduce_snapshots'] = False
+args['comment'] = "Status Quo, 200 random snapshots from NEP, gridschema"
+args['rand_snapshots'] = None
+args['reproduce_snapshots'] = 'rand_snaps'
 
 try:
     conn = db.connection(section='oedb')
