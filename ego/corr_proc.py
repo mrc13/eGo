@@ -55,6 +55,8 @@ ormclass_result_line_t = model_draft.EgoGridPfHvResultLineT
 ormclass_result_bus_t = model_draft.EgoGridPfHvResultBusT
 ormclass_result_load = model_draft.EgoGridPfHvResultLoad
 ormclass_result_load_t = model_draft.EgoGridPfHvResultLoadT
+ormclass_result_storage = model_draft.EgoGridPfHvResultStorage
+ormclass_result_storage_t = model_draft.EgoGridPfHvResultStorageT
 
 ormclass_source = model_draft.EgoGridPfHvSource
 
@@ -319,6 +321,32 @@ gens_df = pd.DataFrame(query.all(),
 gens_df = gens_df.set_index('generator_id')
 
 gens_df.to_csv(result_dir + 'gens_df.csv', encoding='utf-8')
+
+#%% Storage
+logger.info('Storage')
+query = session.query(
+        ormclass_result_storage.storage_id,
+        ormclass_result_storage.bus,
+        ormclass_result_storage.p_nom,
+        ormclass_source.name,
+        ormclass_result_storage_t.p,
+        ormclass_result_storage_t.state_of_charge
+        ).join(ormclass_result_storage_t,
+               ormclass_result_storage_t.storage_id == ormclass_result_storage.storage_id
+                ).join(
+                ormclass_source,
+                ormclass_source.source_id == ormclass_result_storage.source
+                ).filter(
+                ormclass_result_storage.result_id == result_id,
+                ormclass_result_storage_t.result_id == result_id)
+
+storage_df = pd.DataFrame(query.all(),
+                      columns=[column['name'] for
+                               column in
+                               query.column_descriptions])
+storage_df = storage_df.set_index('storage_id')
+
+storage_df.to_csv(result_dir + 'storage_df.csv', encoding='utf-8')
 
 #%% Transformers
 logger.info('Transformers')

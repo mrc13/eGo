@@ -68,7 +68,7 @@ args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
 args['end_snapshot'] = 8760
-args['comment'] = "Status Quo, 200 random snapshots from NEP, gridschema"
+args['comment'] = "Status Quo, 200 random snapshots from NEP, gridschema, no storage"
 args['rand_snapshots'] = True
 args['reproduce_snapshots'] = 'rand_snaps'
 
