@@ -59,7 +59,7 @@ args = {
   'pf_post_lopf': False,
   'reproduce_noise': False,
   'results': 'results/version_test',
-  'scn_name': 'Status Quo',
+  'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',
   'storage_extendable': False}
@@ -68,7 +68,7 @@ args['user_name'] = 'malte_scharf'
 args['branch_capacity_factor'] = None
 args['start_snapshot'] = 1
 args['end_snapshot'] = 8760
-args['comment'] = "Status Quo, 200 random snapshots from NEP, gridschema, no storage"
+args['comment'] = "NEP 2035, 200 random snapshots from NEP, gridschema, no storage"
 args['rand_snapshots'] = True
 args['reproduce_snapshots'] = 'rand_snaps'
 
