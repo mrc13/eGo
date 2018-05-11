@@ -38,8 +38,11 @@ import logging
 # Directories
 now = strftime("%Y-%m-%d_%H%M", localtime())
 
-## Logging
+log_dir = 'edisgo_log'
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
 
+## Logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
@@ -47,7 +50,7 @@ specs_logger = logging.getLogger('specs')
 network_logger = logging.getLogger('network')
 pypsa_logger = logging.getLogger('pypsa.pf')
 
-fh = logging.FileHandler('corr_edisgo_' + now + '.log', mode='w')
+fh = logging.FileHandler(log_dir + '/corr_edisgo_' + now + '.log', mode='w')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
@@ -125,8 +128,8 @@ if random_mv_grids:
 #
 #    mv_grids = chosen_grids
 
-print('chosen_grids:')
-print(mv_grids)
+logger.info('chosen_grids:')
+logger.info(mv_grids)
 
 query = session.query(
         ormclass_hvmv_subst.subst_id,

@@ -24,13 +24,17 @@ from ego.tools import corr_io
 # Directories
 now = strftime("%Y-%m-%d_%H%M", localtime())
 
+log_dir = 'proc_log'
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
 ## Logging
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-fh = logging.FileHandler('corr_proc_' + now + '.log', mode='w')
+fh = logging.FileHandler(log_dir + '/corr_proc_' + now + '.log', mode='w')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)

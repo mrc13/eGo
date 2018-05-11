@@ -19,9 +19,13 @@ from ego.tools.specs import get_scn_name_from_result_id
 from sqlalchemy.orm import sessionmaker
 import logging
 from time import localtime, strftime
+import os
 
 # Directories
 now = strftime("%Y-%m-%d_%H%M", localtime())
+log_dir = 'etrago_log'
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
 
 ## Logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
@@ -29,7 +33,7 @@ logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 logger = logging.getLogger(__name__)
 pypsa_log = logging.getLogger('pypsa') # Listen to Pypsa
 
-fh = logging.FileHandler('corr_etrago_' + now + '.log', mode='w')
+fh = logging.FileHandler(log_dir + '/corr_etrago_' + now + '.log', mode='w')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
