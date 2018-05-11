@@ -29,39 +29,38 @@ from sqlalchemy.orm import sessionmaker
 import os.path
 from random import randint, shuffle
 import pickle
+from time import localtime, strftime
 
 from math import sqrt, pi
 
 import logging
 
+# Directories
+now = strftime("%Y-%m-%d_%H%M", localtime())
+
 ## Logging
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)-8s %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    filename='corr_edisgo.log', filemode='a')
+logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
-#logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
-#
 logger = logging.getLogger(__name__)
-#specs_logger = logging.getLogger('specs')
-#network_logger = logging.getLogger('network')
-#pypsa_logger = logging.getLogger('pypsa.pf')
-#
-#fh = logging.FileHandler('corr_edisgo.log', mode='w')
-#fh.setLevel(logging.INFO)
-#formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-#fh.setFormatter(formatter)
-#
-#logger.addHandler(fh)
-#specs_logger.addHandler(fh)
-#network_logger.addHandler(fh)
-#pypsa_logger.addHandler(fh)
+specs_logger = logging.getLogger('specs')
+network_logger = logging.getLogger('network')
+pypsa_logger = logging.getLogger('pypsa.pf')
 
-#Inputs
+fh = logging.FileHandler('corr_edisgo_' + now + '.log', mode='w')
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
 
+logger.addHandler(fh)
+specs_logger.addHandler(fh)
+network_logger.addHandler(fh)
+pypsa_logger.addHandler(fh)
+
+
+# General inputs
+result_id = int(input("Type result ID: "))
 ding0_files = 'data/ding0_grids'
-result_id = 5
 add_results = True
 
 random_mv_grids = True

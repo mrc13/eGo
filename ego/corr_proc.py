@@ -11,7 +11,6 @@ from geoalchemy2.shape import to_shape
 import os
 from time import localtime, strftime
 
-
 ## Project Packages
 from egoio.tools import db
 from egoio.db_tables import model_draft, grid
@@ -22,13 +21,16 @@ from ego.tools.specs import (
         get_settings_from_result_id)
 from ego.tools import corr_io
 
+# Directories
+now = strftime("%Y-%m-%d_%H%M", localtime())
+
 ## Logging
 import logging
 logging.basicConfig(format='%(asctime)s %(message)s',level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-fh = logging.FileHandler('corr_proc.log', mode='w')
+fh = logging.FileHandler('corr_proc_' + now + '.log', mode='w')
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
