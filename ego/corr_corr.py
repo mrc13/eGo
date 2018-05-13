@@ -248,14 +248,14 @@ line_df['s_len_abs'] = line_df.apply(    # in GVAkm
                 for s in x['s_rel']
                 ], axis=1)
 ## Overload
-line_df['s_over'] = line_df.apply(          ## Relative in 1
+line_df['s_over'] = line_df.apply(          ## Relative in 1 ## No threshhold
         lambda x: [
                 n - cont_fct_hv
                 if x['lev'] == 'HV'
                 else n - cont_fct_ehv
                 for n in x['s_rel']], axis=1)
 
-line_df['s_over_abs'] = line_df.apply(      ## Absoulute in GVAkm
+line_df['s_over_abs'] = line_df.apply(      ## Absoulute in GVAkm ## With threshhold
         lambda x: [n * x['s_nom_length_GVAkm'] \
                    if n>0 else 0 for n in x['s_over']], axis=1)
 
@@ -276,6 +276,9 @@ line_df['anytime_over'] = line_df.apply(      ## True if at any time the line pr
 
 line_df['s_over_max'] = line_df.apply(      ## Relative in 1
         lambda x:  max(x['s_over']) if max(x['s_over']) > 0 else 0, axis=1)
+line_df['s_over_abs_max'] = line_df.apply(      ## Max abslute overload GVAkm
+        lambda x:  max(x['s_over_abs']), axis=1)
+
 line_df['s_over_dur'] = line_df.apply(      ## Relative in 1
         lambda x:  sum(x['s_over_bol'])/len(snap_idx), axis=1)
 
@@ -323,6 +326,9 @@ mv_line_df['anytime_over'] = mv_line_df.apply(      ## True if at any time the l
 
 mv_line_df['s_over_max'] = mv_line_df.apply(      ## Relative in 1
         lambda x:  max(x['s_over']) if max(x['s_over']) > 0 else 0, axis=1)
+mv_line_df['s_over_abs_max'] = mv_line_df.apply(      ## Max abslute overload GVAkm
+        lambda x:  max(x['s_over_abs']), axis=1)
+
 mv_line_df['s_over_dur'] = mv_line_df.apply(      ## Relative in 1
         lambda x:  sum(x['s_over_bol'])/len(snap_idx), axis=1)
 

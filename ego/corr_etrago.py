@@ -58,7 +58,7 @@ args = {
   'parallelisation': False,
   'pf_post_lopf': False,
   'reproduce_noise': False,
-  'results': 'results/version_test',
+  'results': False,
   'scn_name': 'NEP 2035',
   'skip_snapshots': False,
   'solver': 'gurobi',

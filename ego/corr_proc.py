@@ -76,7 +76,7 @@ result_id = int(input("Type result ID: "))
 
 # Result Folder
 now = strftime("%Y-%m-%d", localtime())
-result_dir = 'corr_results/' + str(result_id) + '/data_proc/' + now + '/'
+result_dir = 'proc_results/' + str(result_id) + '/' + now + '/'
 
 if not os.path.exists(result_dir):
     os.makedirs(result_dir)
