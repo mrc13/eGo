@@ -11,12 +11,14 @@ Corr Functions
 
 def corr_colors (v_corr=0):
     try:
-        i = round(abs(v_corr), 2)
-        rgb = (1-i,i,0)
+        i = round((v_corr+1)/2, 2)
+
+        cmap = plt.get_cmap('RdYlGn')
+        rgb = cmap(i)[0:3]
+
         return rgb
     except:
         return (0.5, 0.5, 0.5)
-
 
 def color_for_s_over(i):
     if i > 1.0:
@@ -38,8 +40,7 @@ def to_str (v):
         return v
 
 def get_lev_from_volt (
-        v_voltage,
-        v_aggr = False): # in kV
+        v_voltage): # in kV
     try:
         v = float(v_voltage)
     except:
@@ -51,15 +52,9 @@ def get_lev_from_volt (
     elif (v >= 60) & (v <= 110):
         return 'HV'
     elif v == 220:
-        if v_aggr==True:
-            return 'EHV'
-        else:
-            return 'EHV220'
+        return 'EHV'
     elif v == 380:
-        if v_aggr==True:
-            return 'EHV'
-        else:
-            return 'EHV380'
+        return 'EHV'
     else: return 'unknown'
 
 
@@ -94,14 +89,16 @@ def add_table_to_tex (v_title, v_dir, v_file_name):
 def add_plot_lines_to_ax(v_line_df,
                          v_ax,
                          v_level_colors,
-                         v_size=1):
+                         v_size=1,
+                         v_alpha=0.4):
     levs = set(v_line_df['lev'])
     for lev in levs:
         plot_df = v_line_df.loc[v_line_df['lev'] == lev]
         plot_df.plot(
                 color=v_level_colors[lev],
                 linewidth=v_size,
-                ax = v_ax)
+                ax = v_ax,
+                alpha=v_alpha)
 
     return v_ax
 
@@ -206,3 +203,45 @@ def corr(X, Y):
     ucl = (np.exp(2*ucl) - 1) / (np.exp(2*ucl) + 1)
 
     return r,lcl,ucl
+
+def aggregate_loading (v_line_df, v_levs, v_snap_idx):
+    s_sum_len_t = pd.DataFrame(0.0,
+                                   index=v_snap_idx,
+                                   columns=v_levs)
+    s_sum_len_over_t = pd.DataFrame(0.0,
+                                   index=v_snap_idx,
+                                   columns=v_levs)
+    s_sum_len_under_t = pd.DataFrame(0.0,
+                                   index=v_snap_idx,
+                                   columns=v_levs)
+
+    for idx1, row1 in v_line_df.loc[
+            v_line_df['lev'].isin(v_levs)
+            ].iterrows():
+
+        lev = row1['lev']
+
+        #### s_len
+        s_len_series = pd.Series(
+                data=row1['s_len_abs'],
+                index=v_snap_idx)
+
+        s_sum_len_t[lev] = (s_sum_len_t[lev]
+                                 + s_len_series)
+        #### s_over
+        s_over_series = pd.Series(
+                data=row1['s_over_abs'],
+                index=v_snap_idx)
+
+        s_sum_len_over_t[lev] = (s_sum_len_over_t[lev]
+                                 + s_over_series)
+
+        #### s_under
+        s_under_series = pd.Series(
+                data=row1['s_under_abs'],
+                index=v_snap_idx)
+
+        s_sum_len_under_t[lev] = (s_sum_len_under_t[lev]
+                                 + s_under_series)
+
+    return s_sum_len_t, s_sum_len_over_t, s_sum_len_under_t

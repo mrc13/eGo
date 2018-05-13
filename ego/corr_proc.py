@@ -10,6 +10,7 @@ from geoalchemy2.shape import to_shape
 #import numpy as np
 import os
 from time import localtime, strftime
+from math import sqrt
 
 ## Project Packages
 from egoio.tools import db

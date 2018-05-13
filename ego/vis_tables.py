@@ -26,18 +26,18 @@ try:
 except:
     logger.error('Failed connection to Database',  exc_info=True)
 
-try:
-    print("Decide on the Result to view")
-    result_id = int(input("Type result ID: "))
-
-    session.execute('''
-    SELECT model_draft.corr_vis_result_id(:result_id);
-    ''', {'result_id': result_id})
-    session.commit()
-
-except:
-    session.rollback()
-    logger.error('Failed to visualize results',  exc_info=True)
+#try:
+#    print("Decide on the Result to view")
+#    result_id = int(input("Type result ID: "))
+#
+#    session.execute('''
+#    SELECT model_draft.corr_vis_result_id(:result_id);
+#    ''', {'result_id': result_id})
+#    session.commit()
+#
+#except:
+#    session.rollback()
+#    logger.error('Failed to visualize results',  exc_info=True)
 
 try:
     run = True

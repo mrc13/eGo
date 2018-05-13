@@ -138,6 +138,7 @@ carrier_colors = {
         "load shedding" : "black"}
 
 var_rens = ['wind', 'solar']
+
 #%% Data import
 try:
     line_df = pd.DataFrame.from_csv(result_dir + 'line_df.csv', encoding='utf-8')
@@ -735,10 +736,6 @@ s_sum_len_over_t = pd.DataFrame(0.0,
                                    index=snap_idx,
                                    columns=all_levels)
 
-#x = s_sum_len_over_t['HV']
-#y = s_sum_len_over_t['EHV380']
-#corr(x,y)
-#
 
 
 len_over_t = pd.DataFrame(0.0,
